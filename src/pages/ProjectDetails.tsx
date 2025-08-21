@@ -3,6 +3,8 @@ import { useParams, useNavigate } from "react-router-dom";
 import { Layout } from "@/components/Layout";
 import { DeploymentLogs } from "@/components/deployment-logs";
 import { EnvironmentVariables } from "@/components/environment-variables";
+import { DeploymentSkeleton } from "@/components/deployment-skeleton";
+import { LoadingSpinner } from "@/components/loading-spinner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -21,7 +23,8 @@ import {
   Trash2,
   Edit3,
   RotateCcw,
-  FileText
+  FileText,
+  AlertCircle
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
@@ -75,6 +78,26 @@ export default function ProjectDetails() {
   const [activeTab, setActiveTab] = useState("overview");
   const [editingDeployment, setEditingDeployment] = useState<Deployment | null>(null);
   const [deploymentName, setDeploymentName] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  
+  // Simulate loading project data
+  useEffect(() => {
+    const loadProjectData = async () => {
+      try {
+        setIsLoading(true);
+        // Simulate API call
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        setError(null);
+      } catch (err) {
+        setError("Failed to load project details");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadProjectData();
+  }, [id]);
   
   // Mock deployment data
   const [deployments, setDeployments] = useState<Deployment[]>([
@@ -322,13 +345,25 @@ export default function ProjectDetails() {
           </TabsContent>
 
           <TabsContent value="deployments" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Deployment History</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {deployments.map((deployment) => (
+            {isLoading ? (
+              <DeploymentSkeleton />
+            ) : error ? (
+              <Card>
+                <CardContent className="pt-6">
+                  <div className="text-center">
+                    <AlertCircle className="h-8 w-8 text-destructive mx-auto mb-2" />
+                    <p className="text-muted-foreground">{error}</p>
+                  </div>
+                </CardContent>
+              </Card>
+            ) : (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Deployment History</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    {deployments.map((deployment) => (
                     <div key={deployment.id} className="flex items-center justify-between p-4 border rounded-lg">
                       <div className="flex items-center gap-4">
                         <Badge className={getDeploymentStatusColor(deployment.status)}>
@@ -456,10 +491,11 @@ export default function ProjectDetails() {
                         )}
                       </div>
                     </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
           </TabsContent>
 
           <TabsContent value="environment" className="space-y-6">

@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Layout } from "@/components/Layout";
 import { Progress } from "@/components/ui/progress";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { LoadingSpinner } from "@/components/loading-spinner";
 import { 
   Upload, 
   FileText, 
@@ -29,11 +30,19 @@ interface ProjectConfig {
   files: File[];
 }
 
+interface FormErrors {
+  name?: string;
+  domain?: string;
+  files?: string;
+}
+
 export default function Deploy() {
   const [currentStep, setCurrentStep] = useState<DeploymentStep>('upload');
   const [isDeploying, setIsDeploying] = useState(false);
   const [deploymentProgress, setDeploymentProgress] = useState(0);
   const [dragActive, setDragActive] = useState(false);
+  const [errors, setErrors] = useState<FormErrors>({});
+  const [isValidating, setIsValidating] = useState(false);
   const { toast } = useToast();
   
   const [projectConfig, setProjectConfig] = useState<ProjectConfig>({
@@ -60,6 +69,19 @@ export default function Deploy() {
     
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
       const files = Array.from(e.dataTransfer.files);
+      const validationError = validateFiles(files);
+      
+      if (validationError) {
+        setErrors(prev => ({ ...prev, files: validationError }));
+        toast({
+          title: "Invalid files",
+          description: validationError,
+          variant: "destructive"
+        });
+        return;
+      }
+      
+      setErrors(prev => ({ ...prev, files: undefined }));
       setProjectConfig(prev => ({ ...prev, files }));
       toast({
         title: "Files uploaded",
@@ -71,6 +93,19 @@ export default function Deploy() {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
       const files = Array.from(e.target.files);
+      const validationError = validateFiles(files);
+      
+      if (validationError) {
+        setErrors(prev => ({ ...prev, files: validationError }));
+        toast({
+          title: "Invalid files",
+          description: validationError,
+          variant: "destructive"
+        });
+        return;
+      }
+      
+      setErrors(prev => ({ ...prev, files: undefined }));
       setProjectConfig(prev => ({ ...prev, files }));
       toast({
         title: "Files selected",
@@ -79,7 +114,81 @@ export default function Deploy() {
     }
   };
 
+  const validateFiles = (files: File[]): string | null => {
+    const maxFileSize = 10 * 1024 * 1024; // 10MB
+    const allowedTypes = [
+      'text/html', 'text/css', 'application/javascript', 'text/javascript',
+      'application/json', 'image/png', 'image/jpeg', 'image/gif', 'image/svg+xml',
+      'application/zip', 'text/plain'
+    ];
+
+    for (const file of files) {
+      if (file.size > maxFileSize) {
+        return `File "${file.name}" is too large. Maximum size is 10MB.`;
+      }
+      
+      if (!allowedTypes.includes(file.type) && !file.name.match(/\.(html|css|js|json|png|jpg|jpeg|gif|svg|zip|txt)$/i)) {
+        return `File "${file.name}" has an unsupported file type.`;
+      }
+    }
+
+    return null;
+  };
+
+  const validateProjectName = (name: string): string | null => {
+    if (!name.trim()) {
+      return "Project name is required";
+    }
+    if (name.length < 3) {
+      return "Project name must be at least 3 characters";
+    }
+    if (name.length > 50) {
+      return "Project name must be less than 50 characters";
+    }
+    if (!/^[a-zA-Z0-9\s-_]+$/.test(name)) {
+      return "Project name can only contain letters, numbers, spaces, hyphens, and underscores";
+    }
+    return null;
+  };
+
+  const validateDomain = (domain: string): string | null => {
+    if (!domain.trim()) return null; // Domain is optional
+    
+    const domainRegex = /^(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$/;
+    if (!domainRegex.test(domain)) {
+      return "Please enter a valid domain (e.g., www.example.com)";
+    }
+    return null;
+  };
+
+  const validateConfiguration = (): boolean => {
+    const newErrors: FormErrors = {};
+    
+    const nameError = validateProjectName(projectConfig.name);
+    if (nameError) newErrors.name = nameError;
+    
+    const domainError = validateDomain(projectConfig.domain);
+    if (domainError) newErrors.domain = domainError;
+    
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
   const simulateDeployment = async () => {
+    setIsValidating(true);
+    
+    // Validate configuration
+    if (!validateConfiguration()) {
+      setIsValidating(false);
+      toast({
+        title: "Validation failed",
+        description: "Please fix the errors before deploying",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    setIsValidating(false);
     setIsDeploying(true);
     setCurrentStep('deploy');
     
@@ -152,6 +261,13 @@ export default function Deploy() {
           </Label>
         </div>
 
+        {errors.files && (
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>{errors.files}</AlertDescription>
+          </Alert>
+        )}
+
         {projectConfig.files.length > 0 && (
           <div className="space-y-2">
             <Label>Selected Files ({projectConfig.files.length})</Label>
@@ -201,8 +317,18 @@ export default function Deploy() {
             id="project-name"
             placeholder="My Awesome Website"
             value={projectConfig.name}
-            onChange={(e) => setProjectConfig(prev => ({ ...prev, name: e.target.value }))}
+            onChange={(e) => {
+              setProjectConfig(prev => ({ ...prev, name: e.target.value }));
+              if (errors.name) {
+                const nameError = validateProjectName(e.target.value);
+                setErrors(prev => ({ ...prev, name: nameError || undefined }));
+              }
+            }}
+            className={errors.name ? "border-destructive" : ""}
           />
+          {errors.name && (
+            <p className="text-sm text-destructive">{errors.name}</p>
+          )}
         </div>
 
         <div className="space-y-2">
@@ -221,8 +347,18 @@ export default function Deploy() {
             id="custom-domain"
             placeholder="www.mywebsite.com"
             value={projectConfig.domain}
-            onChange={(e) => setProjectConfig(prev => ({ ...prev, domain: e.target.value }))}
+            onChange={(e) => {
+              setProjectConfig(prev => ({ ...prev, domain: e.target.value }));
+              if (errors.domain) {
+                const domainError = validateDomain(e.target.value);
+                setErrors(prev => ({ ...prev, domain: domainError || undefined }));
+              }
+            }}
+            className={errors.domain ? "border-destructive" : ""}
           />
+          {errors.domain && (
+            <p className="text-sm text-destructive">{errors.domain}</p>
+          )}
           <p className="text-xs text-muted-foreground">
             You'll receive instructions on how to configure your DNS settings after deployment
           </p>
@@ -246,11 +382,15 @@ export default function Deploy() {
           </Button>
           <Button 
             onClick={simulateDeployment}
-            disabled={!projectConfig.name.trim()}
+            disabled={!projectConfig.name.trim() || isValidating}
             className="bg-gradient-primary hover:shadow-glow min-w-32"
           >
-            <Rocket className="h-4 w-4 mr-2" />
-            Deploy Now
+            {isValidating ? (
+              <LoadingSpinner size="sm" />
+            ) : (
+              <Rocket className="h-4 w-4 mr-2" />
+            )}
+            {isValidating ? "Validating..." : "Deploy Now"}
           </Button>
         </div>
       </CardContent>

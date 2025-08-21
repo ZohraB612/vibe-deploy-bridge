@@ -1,7 +1,10 @@
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Layout } from "@/components/Layout";
+import { DashboardSkeleton } from "@/components/dashboard-skeleton";
+import { LoadingSpinner } from "@/components/loading-spinner";
 import { Plus, ExternalLink, Clock, CheckCircle, AlertCircle, Zap } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 
@@ -60,6 +63,56 @@ const getStatusColor = (status: string) => {
 
 export default function Dashboard() {
   const navigate = useNavigate();
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Simulate data loading
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        setIsLoading(true);
+        // Simulate API call
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        setError(null);
+      } catch (err) {
+        setError("Failed to load dashboard data");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadData();
+  }, []);
+  if (error) {
+    return (
+      <Layout>
+        <div className="container mx-auto px-4 py-8">
+          <Card className="max-w-md mx-auto">
+            <CardHeader className="text-center">
+              <AlertCircle className="h-8 w-8 text-destructive mx-auto mb-2" />
+              <CardTitle>Error Loading Dashboard</CardTitle>
+            </CardHeader>
+            <CardContent className="text-center">
+              <p className="text-muted-foreground mb-4">{error}</p>
+              <Button onClick={() => window.location.reload()}>
+                Try Again
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      </Layout>
+    );
+  }
+
+  if (isLoading) {
+    return (
+      <Layout>
+        <div className="container mx-auto px-4 py-8">
+          <DashboardSkeleton />
+        </div>
+      </Layout>
+    );
+  }
   
   return (
     <Layout>
