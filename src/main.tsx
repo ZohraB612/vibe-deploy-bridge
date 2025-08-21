@@ -1,10 +1,18 @@
 import { createRoot } from 'react-dom/client'
+import { BrowserRouter } from 'react-router-dom'
 import App from './App.tsx'
 import './index.css'
 import { ThemeProvider } from '@/components/theme-provider'
+import { UserProvider } from '@/contexts/UserContext'
+import { Toaster } from '@/components/ui/sonner'
 
 createRoot(document.getElementById("root")!).render(
-  <ThemeProvider defaultTheme="system" storageKey="vite-ui-theme">
-    <App />
-  </ThemeProvider>
+  <BrowserRouter>
+    <ThemeProvider defaultTheme="system" storageKey="vite-ui-theme">
+      <UserProvider>
+        <App />
+        <Toaster />
+      </UserProvider>
+    </ThemeProvider>
+  </BrowserRouter>
 );

@@ -3,6 +3,7 @@ import { Cloud, Home, Settings, User, Menu, X } from "lucide-react";
 import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { UserMenu } from "@/components/user-menu";
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -49,11 +50,8 @@ export function Layout({ children }: LayoutProps) {
                   <span>{item.name}</span>
                 </Link>
               ))}
-              <ThemeToggle />
-              <Button variant="outline" size="sm">
-                <User className="h-4 w-4 mr-2" />
-                Account
-              </Button>
+               <ThemeToggle />
+               <UserMenu />
             </nav>
 
             {/* Mobile menu button */}
@@ -88,13 +86,10 @@ export function Layout({ children }: LayoutProps) {
                     <span>{item.name}</span>
                   </Link>
                 ))}
-                <div className="flex items-center gap-3 self-start mt-2">
-                  <ThemeToggle />
-                  <Button variant="outline" size="sm">
-                    <User className="h-4 w-4 mr-2" />
-                    Account
-                  </Button>
-                </div>
+                 <div className="flex items-center gap-3 self-start mt-2">
+                   <ThemeToggle />
+                   <UserMenu />
+                 </div>
               </nav>
             </div>
           )}
