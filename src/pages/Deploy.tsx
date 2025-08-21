@@ -1,0 +1,438 @@
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Layout } from "@/components/Layout";
+import { Progress } from "@/components/ui/progress";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { 
+  Upload, 
+  FileText, 
+  Globe, 
+  Rocket, 
+  CheckCircle, 
+  AlertCircle,
+  ArrowLeft,
+  ArrowRight,
+  Cloud
+} from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+
+type DeploymentStep = 'upload' | 'configure' | 'deploy' | 'success';
+
+interface ProjectConfig {
+  name: string;
+  description: string;
+  domain: string;
+  files: File[];
+}
+
+export default function Deploy() {
+  const [currentStep, setCurrentStep] = useState<DeploymentStep>('upload');
+  const [isDeploying, setIsDeploying] = useState(false);
+  const [deploymentProgress, setDeploymentProgress] = useState(0);
+  const [dragActive, setDragActive] = useState(false);
+  const { toast } = useToast();
+  
+  const [projectConfig, setProjectConfig] = useState<ProjectConfig>({
+    name: '',
+    description: '',
+    domain: '',
+    files: []
+  });
+
+  const handleDrag = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === "dragenter" || e.type === "dragover") {
+      setDragActive(true);
+    } else if (e.type === "dragleave") {
+      setDragActive(false);
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+    
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      const files = Array.from(e.dataTransfer.files);
+      setProjectConfig(prev => ({ ...prev, files }));
+      toast({
+        title: "Files uploaded",
+        description: `${files.length} file(s) ready for deployment`,
+      });
+    }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      const files = Array.from(e.target.files);
+      setProjectConfig(prev => ({ ...prev, files }));
+      toast({
+        title: "Files selected",
+        description: `${files.length} file(s) ready for deployment`,
+      });
+    }
+  };
+
+  const simulateDeployment = async () => {
+    setIsDeploying(true);
+    setCurrentStep('deploy');
+    
+    const steps = [
+      "Validating your application files...",
+      "Creating cloud storage bucket...",
+      "Uploading your application...", 
+      "Configuring serverless functions...",
+      "Setting up custom domain...",
+      "Finalizing deployment..."
+    ];
+    
+    for (let i = 0; i < steps.length; i++) {
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      setDeploymentProgress((i + 1) / steps.length * 100);
+    }
+    
+    setIsDeploying(false);
+    setCurrentStep('success');
+    toast({
+      title: "Deployment successful!",
+      description: "Your application is now live on the web",
+    });
+  };
+
+  const renderUploadStep = () => (
+    <Card className="w-full max-w-2xl mx-auto">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Upload className="h-5 w-5" />
+          Upload Your Application
+        </CardTitle>
+        <CardDescription>
+          Upload your application files as a ZIP archive or select multiple files
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        <div
+          className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
+            dragActive 
+              ? 'border-primary bg-primary/5' 
+              : 'border-muted-foreground/25 hover:border-primary/50'
+          }`}
+          onDragEnter={handleDrag}
+          onDragLeave={handleDrag}
+          onDragOver={handleDrag}
+          onDrop={handleDrop}
+        >
+          <Cloud className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+          <div className="space-y-2">
+            <p className="text-lg font-medium">
+              Drop your files here, or click to browse
+            </p>
+            <p className="text-sm text-muted-foreground">
+              Supports ZIP files, HTML, CSS, JS, and other web assets
+            </p>
+          </div>
+          <input
+            type="file"
+            multiple
+            accept=".zip,.html,.css,.js,.json,.png,.jpg,.jpeg,.gif,.svg"
+            onChange={handleFileChange}
+            className="hidden"
+            id="file-upload"
+          />
+          <Label htmlFor="file-upload" className="cursor-pointer">
+            <Button variant="outline" className="mt-4" asChild>
+              <span>Browse Files</span>
+            </Button>
+          </Label>
+        </div>
+
+        {projectConfig.files.length > 0 && (
+          <div className="space-y-2">
+            <Label>Selected Files ({projectConfig.files.length})</Label>
+            <div className="max-h-32 overflow-y-auto space-y-1 p-2 border rounded">
+              {projectConfig.files.map((file, index) => (
+                <div key={index} className="flex items-center gap-2 text-sm">
+                  <FileText className="h-4 w-4 text-muted-foreground" />
+                  <span>{file.name}</span>
+                  <span className="text-muted-foreground">
+                    ({(file.size / 1024).toFixed(1)} KB)
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="flex justify-end">
+          <Button 
+            onClick={() => setCurrentStep('configure')}
+            disabled={projectConfig.files.length === 0}
+            className="min-w-32"
+          >
+            Next Step
+            <ArrowRight className="h-4 w-4 ml-2" />
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+
+  const renderConfigureStep = () => (
+    <Card className="w-full max-w-2xl mx-auto">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Globe className="h-5 w-5" />
+          Configure Your Deployment
+        </CardTitle>
+        <CardDescription>
+          Set up your project details and custom domain
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        <div className="space-y-2">
+          <Label htmlFor="project-name">Project Name *</Label>
+          <Input
+            id="project-name"
+            placeholder="My Awesome Website"
+            value={projectConfig.name}
+            onChange={(e) => setProjectConfig(prev => ({ ...prev, name: e.target.value }))}
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="project-description">Description (Optional)</Label>
+          <Textarea
+            id="project-description"
+            placeholder="A brief description of your project..."
+            value={projectConfig.description}
+            onChange={(e) => setProjectConfig(prev => ({ ...prev, description: e.target.value }))}
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="custom-domain">Custom Domain (Optional)</Label>
+          <Input
+            id="custom-domain"
+            placeholder="www.mywebsite.com"
+            value={projectConfig.domain}
+            onChange={(e) => setProjectConfig(prev => ({ ...prev, domain: e.target.value }))}
+          />
+          <p className="text-xs text-muted-foreground">
+            You'll receive instructions on how to configure your DNS settings after deployment
+          </p>
+        </div>
+
+        <Alert>
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>
+            Make sure your main HTML file is named <code className="bg-muted px-1 rounded">index.html</code> 
+            or it's clearly identifiable in your uploaded files.
+          </AlertDescription>
+        </Alert>
+
+        <div className="flex justify-between">
+          <Button 
+            variant="outline" 
+            onClick={() => setCurrentStep('upload')}
+          >
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Back
+          </Button>
+          <Button 
+            onClick={simulateDeployment}
+            disabled={!projectConfig.name.trim()}
+            className="bg-gradient-primary hover:shadow-glow min-w-32"
+          >
+            <Rocket className="h-4 w-4 mr-2" />
+            Deploy Now
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+
+  const renderDeployStep = () => (
+    <Card className="w-full max-w-2xl mx-auto">
+      <CardHeader className="text-center">
+        <CardTitle className="flex items-center justify-center gap-2">
+          <Rocket className="h-5 w-5" />
+          Deploying Your Application
+        </CardTitle>
+        <CardDescription>
+          Please wait while we deploy your application to the cloud
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        <div className="space-y-2">
+          <div className="flex justify-between text-sm">
+            <span>Deployment Progress</span>
+            <span>{Math.round(deploymentProgress)}%</span>
+          </div>
+          <Progress value={deploymentProgress} className="h-2" />
+        </div>
+
+        <div className="space-y-3">
+          {[
+            "Validating your application files...",
+            "Creating cloud storage bucket...",
+            "Uploading your application...", 
+            "Configuring serverless functions...",
+            "Setting up custom domain...",
+            "Finalizing deployment..."
+          ].map((step, index) => {
+            const isCompleted = deploymentProgress > (index / 6) * 100;
+            const isCurrent = deploymentProgress >= (index / 6) * 100 && deploymentProgress < ((index + 1) / 6) * 100;
+            
+            return (
+              <div key={index} className="flex items-center gap-3">
+                {isCompleted ? (
+                  <CheckCircle className="h-4 w-4 text-success" />
+                ) : isCurrent ? (
+                  <div className="h-4 w-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <div className="h-4 w-4 rounded-full border-2 border-muted" />
+                )}
+                <span className={`text-sm ${isCompleted ? 'text-success' : isCurrent ? 'text-foreground' : 'text-muted-foreground'}`}>
+                  {step}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </CardContent>
+    </Card>
+  );
+
+  const renderSuccessStep = () => (
+    <Card className="w-full max-w-2xl mx-auto">
+      <CardHeader className="text-center">
+        <div className="flex justify-center mb-4">
+          <div className="rounded-full bg-success/10 p-3">
+            <CheckCircle className="h-8 w-8 text-success" />
+          </div>
+        </div>
+        <CardTitle>Deployment Successful! 🎉</CardTitle>
+        <CardDescription>
+          Your application is now live and accessible on the web
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        <div className="space-y-4 p-4 bg-muted/50 rounded-lg">
+          <div>
+            <Label className="text-sm font-medium">Project Name</Label>
+            <p className="text-sm text-muted-foreground">{projectConfig.name}</p>
+          </div>
+          <div>
+            <Label className="text-sm font-medium">Live URL</Label>
+            <div className="flex items-center gap-2 mt-1">
+              <code className="text-sm bg-background px-2 py-1 rounded border flex-1">
+                https://{projectConfig.name.toLowerCase().replace(/\s+/g, '-')}.deployhub.app
+              </code>
+              <Button size="sm" variant="outline">
+                Copy
+              </Button>
+            </div>
+          </div>
+          {projectConfig.domain && (
+            <div>
+              <Label className="text-sm font-medium">Custom Domain Setup</Label>
+              <p className="text-sm text-muted-foreground mt-1">
+                To use your custom domain ({projectConfig.domain}), please update your DNS settings.
+                Check your email for detailed instructions.
+              </p>
+            </div>
+          )}
+        </div>
+
+        <div className="flex flex-col sm:flex-row gap-3">
+          <Button className="flex-1" asChild>
+            <a href={`https://${projectConfig.name.toLowerCase().replace(/\s+/g, '-')}.deployhub.app`} target="_blank" rel="noopener noreferrer">
+              View Live Site
+            </a>
+          </Button>
+          <Button variant="outline" className="flex-1" onClick={() => {
+            setCurrentStep('upload');
+            setProjectConfig({ name: '', description: '', domain: '', files: [] });
+            setDeploymentProgress(0);
+          }}>
+            Deploy Another
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+
+  const getStepNumber = () => {
+    switch (currentStep) {
+      case 'upload': return 1;
+      case 'configure': return 2;
+      case 'deploy': return 3;
+      case 'success': return 4;
+      default: return 1;
+    }
+  };
+
+  return (
+    <Layout>
+      <div className="container mx-auto px-4 py-8">
+        {/* Header */}
+        <div className="mb-8 text-center">
+          <h1 className="text-3xl font-bold mb-2">Deploy Your Application</h1>
+          <p className="text-muted-foreground">
+            Follow the simple steps below to get your app live on the web
+          </p>
+        </div>
+
+        {/* Progress Steps */}
+        <div className="flex justify-center mb-8">
+          <div className="flex items-center space-x-4">
+            {[
+              { step: 1, label: 'Upload', key: 'upload' },
+              { step: 2, label: 'Configure', key: 'configure' },
+              { step: 3, label: 'Deploy', key: 'deploy' },
+              { step: 4, label: 'Success', key: 'success' }
+            ].map(({ step, label, key }) => (
+              <div key={step} className="flex items-center">
+                <div className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium ${
+                  getStepNumber() >= step 
+                    ? 'bg-primary text-primary-foreground' 
+                    : 'bg-muted text-muted-foreground'
+                }`}>
+                  {getStepNumber() > step ? (
+                    <CheckCircle className="h-4 w-4" />
+                  ) : (
+                    step
+                  )}
+                </div>
+                <span className={`ml-2 text-sm ${
+                  getStepNumber() >= step ? 'text-foreground' : 'text-muted-foreground'
+                }`}>
+                  {label}
+                </span>
+                {step < 4 && (
+                  <div className={`ml-4 w-8 h-px ${
+                    getStepNumber() > step ? 'bg-primary' : 'bg-muted'
+                  }`} />
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Step Content */}
+        <div className="flex justify-center">
+          {currentStep === 'upload' && renderUploadStep()}
+          {currentStep === 'configure' && renderConfigureStep()}
+          {currentStep === 'deploy' && renderDeployStep()}
+          {currentStep === 'success' && renderSuccessStep()}
+        </div>
+      </div>
+    </Layout>
+  );
+}
