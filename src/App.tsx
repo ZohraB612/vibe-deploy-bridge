@@ -8,6 +8,7 @@ import Dashboard from "./pages/Dashboard";
 import Deploy from "./pages/Deploy";
 import AWSSetup from "./pages/AWSSetup";
 import Settings from "./pages/Settings";
+import ProjectDetails from "./pages/ProjectDetails";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -24,6 +25,7 @@ const App = () => (
           <Route path="/deploy" element={<Deploy />} />
           <Route path="/setup/aws" element={<AWSSetup />} />
           <Route path="/settings" element={<Settings />} />
+          <Route path="/project/:id" element={<ProjectDetails />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>

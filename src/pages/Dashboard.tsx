@@ -3,7 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Layout } from "@/components/Layout";
 import { Plus, ExternalLink, Clock, CheckCircle, AlertCircle, Zap } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 const mockProjects = [
   {
@@ -59,6 +59,8 @@ const getStatusColor = (status: string) => {
 };
 
 export default function Dashboard() {
+  const navigate = useNavigate();
+  
   return (
     <Layout>
       <div className="container mx-auto px-4 py-8">
@@ -166,9 +168,13 @@ export default function Dashboard() {
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
-                        <Button variant="outline" size="sm">
-                          View Details
-                        </Button>
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => navigate(`/project/${project.id}`)}
+                      >
+                        View Details
+                      </Button>
                         <Button variant="outline" size="sm">
                           <ExternalLink className="h-4 w-4" />
                         </Button>
