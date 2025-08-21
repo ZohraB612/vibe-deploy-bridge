@@ -2,6 +2,7 @@ import { Button } from "@/components/ui/button";
 import { Cloud, Home, Settings, User, Menu, X } from "lucide-react";
 import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -48,6 +49,7 @@ export function Layout({ children }: LayoutProps) {
                   <span>{item.name}</span>
                 </Link>
               ))}
+              <ThemeToggle />
               <Button variant="outline" size="sm">
                 <User className="h-4 w-4 mr-2" />
                 Account
@@ -86,10 +88,13 @@ export function Layout({ children }: LayoutProps) {
                     <span>{item.name}</span>
                   </Link>
                 ))}
-                <Button variant="outline" size="sm" className="self-start mt-2">
-                  <User className="h-4 w-4 mr-2" />
-                  Account
-                </Button>
+                <div className="flex items-center gap-3 self-start mt-2">
+                  <ThemeToggle />
+                  <Button variant="outline" size="sm">
+                    <User className="h-4 w-4 mr-2" />
+                    Account
+                  </Button>
+                </div>
               </nav>
             </div>
           )}
