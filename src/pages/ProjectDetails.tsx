@@ -5,6 +5,8 @@ import { DeploymentLogs } from "@/components/deployment-logs";
 import { EnvironmentVariables } from "@/components/environment-variables";
 import { DeploymentSkeleton } from "@/components/deployment-skeleton";
 import { LoadingSpinner } from "@/components/loading-spinner";
+import { DeploymentTimeline } from "@/components/deployment-timeline";
+import { DomainVerification } from "@/components/domain-verification";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -295,10 +297,12 @@ export default function ProjectDetails() {
 
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-6">
             <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="deployments">Deployments</TabsTrigger>
-            <TabsTrigger value="environment">Environment</TabsTrigger>
+            <TabsTrigger value="deployments">Timeline</TabsTrigger>
+            <TabsTrigger value="logs">Live Logs</TabsTrigger>
+            <TabsTrigger value="environment">Variables</TabsTrigger>
+            <TabsTrigger value="domains">Domains</TabsTrigger>
             <TabsTrigger value="settings">Settings</TabsTrigger>
           </TabsList>
 
@@ -345,161 +349,19 @@ export default function ProjectDetails() {
           </TabsContent>
 
           <TabsContent value="deployments" className="space-y-6">
-            {isLoading ? (
-              <DeploymentSkeleton />
-            ) : error ? (
-              <Card>
-                <CardContent className="pt-6">
-                  <div className="text-center">
-                    <AlertCircle className="h-8 w-8 text-destructive mx-auto mb-2" />
-                    <p className="text-muted-foreground">{error}</p>
-                  </div>
-                </CardContent>
-              </Card>
-            ) : (
-              <Card>
-                <CardHeader>
-                  <CardTitle>Deployment History</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    {deployments.map((deployment) => (
-                    <div key={deployment.id} className="flex items-center justify-between p-4 border rounded-lg">
-                      <div className="flex items-center gap-4">
-                        <Badge className={getDeploymentStatusColor(deployment.status)}>
-                          {deployment.status === "active" ? "Active" : deployment.status}
-                        </Badge>
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-2">
-                            <p className="font-medium">
-                              Deploy #{deployment.number}
-                            </p>
-                            <span className="text-xs text-muted-foreground font-mono">
-                              {deployment.commitHash}
-                            </span>
-                          </div>
-                          <p className="text-sm text-muted-foreground">
-                            {deployment.commitMessage}
-                          </p>
-                          <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                            <span className="flex items-center gap-1">
-                              <GitBranch className="h-3 w-3" />
-                              {deployment.branch}
-                            </span>
-                            <span className="flex items-center gap-1">
-                              <Clock className="h-3 w-3" />
-                              {deployment.createdAt.toLocaleDateString()}
-                            </span>
-                            {deployment.buildTime && (
-                              <span>Build: {deployment.buildTime}</span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Button 
-                          variant="outline" 
-                          size="sm"
-                          onClick={() => handleViewLogs(deployment)}
-                        >
-                          <FileText className="h-3 w-3 mr-1" />
-                          View Logs
-                        </Button>
-                        
-                        <Dialog>
-                          <DialogTrigger asChild>
-                            <Button variant="outline" size="sm" onClick={() => handleEditDeployment(deployment)}>
-                              <Edit3 className="h-3 w-3 mr-1" />
-                              Edit
-                            </Button>
-                          </DialogTrigger>
-                          <DialogContent>
-                            <DialogHeader>
-                              <DialogTitle>Edit Deployment #{deployment.number}</DialogTitle>
-                              <DialogDescription>
-                                Update deployment settings and configuration.
-                              </DialogDescription>
-                            </DialogHeader>
-                            <div className="space-y-4">
-                              <div>
-                                <Label htmlFor="deployment-name">Deployment Name</Label>
-                                <Input
-                                  id="deployment-name"
-                                  value={deploymentName}
-                                  onChange={(e) => setDeploymentName(e.target.value)}
-                                  placeholder="Enter deployment name"
-                                />
-                              </div>
-                              <div>
-                                <Label>Commit Hash</Label>
-                                <Input value={deployment.commitHash} readOnly />
-                              </div>
-                              <div>
-                                <Label>Branch</Label>
-                                <Input value={deployment.branch} readOnly />
-                              </div>
-                            </div>
-                            <DialogFooter>
-                              <Button variant="outline" onClick={() => setEditingDeployment(null)}>
-                                Cancel
-                              </Button>
-                              <Button onClick={handleSaveDeployment}>
-                                Save Changes
-                              </Button>
-                            </DialogFooter>
-                          </DialogContent>
-                        </Dialog>
+            <DeploymentTimeline projectId={project.id} />
+          </TabsContent>
 
-                        {deployment.status !== "active" && (
-                          <>
-                            <Button 
-                              variant="outline" 
-                              size="sm"
-                              onClick={() => handleRollback(deployment)}
-                            >
-                              <RotateCcw className="h-3 w-3 mr-1" />
-                              Rollback
-                            </Button>
-                            
-                            <AlertDialog>
-                              <AlertDialogTrigger asChild>
-                                <Button variant="outline" size="sm">
-                                  <Trash2 className="h-3 w-3 mr-1" />
-                                  Delete
-                                </Button>
-                              </AlertDialogTrigger>
-                              <AlertDialogContent>
-                                <AlertDialogHeader>
-                                  <AlertDialogTitle>Delete Deployment</AlertDialogTitle>
-                                  <AlertDialogDescription>
-                                    Are you sure you want to delete deployment #{deployment.number}? 
-                                    This action cannot be undone.
-                                  </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                  <AlertDialogAction
-                                    onClick={() => handleDeleteDeployment(deployment)}
-                                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                                  >
-                                    Delete
-                                  </AlertDialogAction>
-                                </AlertDialogFooter>
-                              </AlertDialogContent>
-                            </AlertDialog>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            )}
+          <TabsContent value="logs" className="space-y-6">
+            <DeploymentLogs deploymentId={project.id} isActive={project.status === "building"} />
           </TabsContent>
 
           <TabsContent value="environment" className="space-y-6">
             <EnvironmentVariables projectId={project.id} />
+          </TabsContent>
+
+          <TabsContent value="domains" className="space-y-6">
+            <DomainVerification projectId={project.id} />
           </TabsContent>
 
           <TabsContent value="settings" className="space-y-6">
