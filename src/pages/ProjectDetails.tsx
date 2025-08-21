@@ -17,9 +17,28 @@ import {
   GitBranch,
   Clock,
   Zap,
-  Terminal
+  Terminal,
+  Trash2,
+  Edit3,
+  RotateCcw,
+  FileText
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+
+interface Deployment {
+  id: string;
+  number: number;
+  status: "active" | "success" | "failed" | "building";
+  createdAt: Date;
+  commitHash: string;
+  commitMessage: string;
+  branch: string;
+  buildTime?: string;
+}
 
 interface Project {
   id: string;
@@ -54,6 +73,62 @@ export default function ProjectDetails() {
   });
 
   const [activeTab, setActiveTab] = useState("overview");
+  const [editingDeployment, setEditingDeployment] = useState<Deployment | null>(null);
+  const [deploymentName, setDeploymentName] = useState("");
+  
+  // Mock deployment data
+  const [deployments, setDeployments] = useState<Deployment[]>([
+    {
+      id: "deploy-1",
+      number: 23,
+      status: "active",
+      createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
+      commitHash: "abc123f",
+      commitMessage: "Fix navbar styling and add dark mode",
+      branch: "main",
+      buildTime: "2m 34s"
+    },
+    {
+      id: "deploy-2", 
+      number: 22,
+      status: "success",
+      createdAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000),
+      commitHash: "def456a",
+      commitMessage: "Add user authentication flow",
+      branch: "main",
+      buildTime: "3m 12s"
+    },
+    {
+      id: "deploy-3",
+      number: 21,
+      status: "failed",
+      createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
+      commitHash: "ghi789b",
+      commitMessage: "Update dependencies and fix vulnerabilities",
+      branch: "feature/security-updates",
+      buildTime: "1m 45s"
+    },
+    {
+      id: "deploy-4",
+      number: 20,
+      status: "success",
+      createdAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000),
+      commitHash: "jkl012c",
+      commitMessage: "Implement user dashboard and analytics",
+      branch: "main",
+      buildTime: "4m 21s"
+    },
+    {
+      id: "deploy-5",
+      number: 19,
+      status: "success", 
+      createdAt: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000),
+      commitHash: "mno345d",
+      commitMessage: "Initial project setup with React and Tailwind",
+      branch: "main",
+      buildTime: "2m 56s"
+    }
+  ]);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -90,6 +165,62 @@ export default function ProjectDetails() {
 
   const handleViewSite = () => {
     window.open(`https://${project.domain}`, '_blank');
+  };
+
+  const handleViewLogs = (deployment: Deployment) => {
+    toast({
+      title: "Opening deployment logs",
+      description: `Viewing logs for deployment #${deployment.number}`
+    });
+    // In real app, navigate to logs page or open logs modal
+  };
+
+  const handleRollback = (deployment: Deployment) => {
+    toast({
+      title: "Rolling back deployment",
+      description: `Rolling back to deployment #${deployment.number}`,
+    });
+    // In real app, trigger rollback API call
+  };
+
+  const handleDeleteDeployment = (deployment: Deployment) => {
+    setDeployments(deployments.filter(d => d.id !== deployment.id));
+    toast({
+      title: "Deployment deleted",
+      description: `Deployment #${deployment.number} has been deleted`,
+      variant: "destructive"
+    });
+  };
+
+  const handleEditDeployment = (deployment: Deployment) => {
+    setEditingDeployment(deployment);
+    setDeploymentName(`Deploy #${deployment.number}`);
+  };
+
+  const handleSaveDeployment = () => {
+    if (editingDeployment) {
+      toast({
+        title: "Deployment updated",
+        description: `Deployment #${editingDeployment.number} has been updated`
+      });
+      setEditingDeployment(null);
+      setDeploymentName("");
+    }
+  };
+
+  const getDeploymentStatusColor = (status: Deployment["status"]) => {
+    switch (status) {
+      case "active":
+        return "bg-success text-success-foreground";
+      case "success":
+        return "bg-success/20 text-success";
+      case "failed":
+        return "bg-destructive text-destructive-foreground";
+      case "building":
+        return "bg-warning text-warning-foreground";
+      default:
+        return "bg-muted text-muted-foreground";
+    }
   };
 
   return (
@@ -197,29 +328,131 @@ export default function ProjectDetails() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  {[...Array(5)].map((_, i) => (
-                    <div key={i} className="flex items-center justify-between p-4 border rounded-lg">
-                      <div className="flex items-center gap-3">
-                        <Badge className={i === 0 ? "bg-success text-success-foreground" : "bg-muted text-muted-foreground"}>
-                          {i === 0 ? "Active" : "Previous"}
+                  {deployments.map((deployment) => (
+                    <div key={deployment.id} className="flex items-center justify-between p-4 border rounded-lg">
+                      <div className="flex items-center gap-4">
+                        <Badge className={getDeploymentStatusColor(deployment.status)}>
+                          {deployment.status === "active" ? "Active" : deployment.status}
                         </Badge>
-                        <div>
-                          <p className="font-medium">
-                            Deploy #{project.deployments - i}
-                          </p>
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            <p className="font-medium">
+                              Deploy #{deployment.number}
+                            </p>
+                            <span className="text-xs text-muted-foreground font-mono">
+                              {deployment.commitHash}
+                            </span>
+                          </div>
                           <p className="text-sm text-muted-foreground">
-                            {new Date(Date.now() - i * 24 * 60 * 60 * 1000).toLocaleDateString()}
+                            {deployment.commitMessage}
                           </p>
+                          <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                            <span className="flex items-center gap-1">
+                              <GitBranch className="h-3 w-3" />
+                              {deployment.branch}
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <Clock className="h-3 w-3" />
+                              {deployment.createdAt.toLocaleDateString()}
+                            </span>
+                            {deployment.buildTime && (
+                              <span>Build: {deployment.buildTime}</span>
+                            )}
+                          </div>
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
-                        <Button variant="outline" size="sm">
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => handleViewLogs(deployment)}
+                        >
+                          <FileText className="h-3 w-3 mr-1" />
                           View Logs
                         </Button>
-                        {i !== 0 && (
-                          <Button variant="outline" size="sm">
-                            Rollback
-                          </Button>
+                        
+                        <Dialog>
+                          <DialogTrigger asChild>
+                            <Button variant="outline" size="sm" onClick={() => handleEditDeployment(deployment)}>
+                              <Edit3 className="h-3 w-3 mr-1" />
+                              Edit
+                            </Button>
+                          </DialogTrigger>
+                          <DialogContent>
+                            <DialogHeader>
+                              <DialogTitle>Edit Deployment #{deployment.number}</DialogTitle>
+                              <DialogDescription>
+                                Update deployment settings and configuration.
+                              </DialogDescription>
+                            </DialogHeader>
+                            <div className="space-y-4">
+                              <div>
+                                <Label htmlFor="deployment-name">Deployment Name</Label>
+                                <Input
+                                  id="deployment-name"
+                                  value={deploymentName}
+                                  onChange={(e) => setDeploymentName(e.target.value)}
+                                  placeholder="Enter deployment name"
+                                />
+                              </div>
+                              <div>
+                                <Label>Commit Hash</Label>
+                                <Input value={deployment.commitHash} readOnly />
+                              </div>
+                              <div>
+                                <Label>Branch</Label>
+                                <Input value={deployment.branch} readOnly />
+                              </div>
+                            </div>
+                            <DialogFooter>
+                              <Button variant="outline" onClick={() => setEditingDeployment(null)}>
+                                Cancel
+                              </Button>
+                              <Button onClick={handleSaveDeployment}>
+                                Save Changes
+                              </Button>
+                            </DialogFooter>
+                          </DialogContent>
+                        </Dialog>
+
+                        {deployment.status !== "active" && (
+                          <>
+                            <Button 
+                              variant="outline" 
+                              size="sm"
+                              onClick={() => handleRollback(deployment)}
+                            >
+                              <RotateCcw className="h-3 w-3 mr-1" />
+                              Rollback
+                            </Button>
+                            
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button variant="outline" size="sm">
+                                  <Trash2 className="h-3 w-3 mr-1" />
+                                  Delete
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Delete Deployment</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    Are you sure you want to delete deployment #{deployment.number}? 
+                                    This action cannot be undone.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                  <AlertDialogAction
+                                    onClick={() => handleDeleteDeployment(deployment)}
+                                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                  >
+                                    Delete
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          </>
                         )}
                       </div>
                     </div>
