@@ -4,7 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import { Play, Pause, Download, Trash2, Terminal } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Play, Pause, Download, Trash2, Terminal, Search, Filter } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface LogEntry {
@@ -24,6 +25,8 @@ export function DeploymentLogs({ deploymentId, isActive = false }: DeploymentLog
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [isStreaming, setIsStreaming] = useState(isActive);
   const [autoScroll, setAutoScroll] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [levelFilter, setLevelFilter] = useState<LogEntry["level"] | "all">("all");
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
 
@@ -110,7 +113,7 @@ export function DeploymentLogs({ deploymentId, isActive = false }: DeploymentLog
   };
 
   const downloadLogs = () => {
-    const logText = logs.map(log => 
+    const logText = filteredLogs.map(log => 
       `[${log.timestamp.toISOString()}] ${log.level.toUpperCase()} ${log.source ? `[${log.source}]` : ''} ${log.message}`
     ).join('\n');
     
@@ -128,6 +131,17 @@ export function DeploymentLogs({ deploymentId, isActive = false }: DeploymentLog
     });
   };
 
+  // Filter logs based on search query and level filter
+  const filteredLogs = logs.filter(log => {
+    const matchesSearch = searchQuery === "" || 
+      log.message.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      log.source?.toLowerCase().includes(searchQuery.toLowerCase());
+    
+    const matchesLevel = levelFilter === "all" || log.level === levelFilter;
+    
+    return matchesSearch && matchesLevel;
+  });
+
   return (
     <Card className="h-full">
       <CardHeader className="pb-4">
@@ -136,7 +150,7 @@ export function DeploymentLogs({ deploymentId, isActive = false }: DeploymentLog
             <Terminal className="h-5 w-5 text-primary" />
             <CardTitle>Deployment Logs</CardTitle>
             <Badge variant="outline" className="text-xs">
-              {logs.length} entries
+              {filteredLogs.length} of {logs.length} entries
             </Badge>
           </div>
           <div className="flex items-center gap-2">
@@ -180,20 +194,47 @@ export function DeploymentLogs({ deploymentId, isActive = false }: DeploymentLog
             </Button>
           </div>
         </div>
+        <div className="flex items-center gap-2 mt-4">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search logs..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+          <div className="flex items-center gap-1">
+            <Filter className="h-4 w-4 text-muted-foreground" />
+            <select
+              value={levelFilter}
+              onChange={(e) => setLevelFilter(e.target.value as LogEntry["level"] | "all")}
+              className="px-3 py-1.5 text-sm border border-border rounded-md bg-background"
+            >
+              <option value="all">All levels</option>
+              <option value="info">Info</option>
+              <option value="warn">Warning</option>
+              <option value="error">Error</option>
+              <option value="success">Success</option>
+            </select>
+          </div>
+        </div>
       </CardHeader>
       <CardContent className="p-0 h-[400px]">
         <ScrollArea ref={scrollAreaRef} className="h-full px-6 pb-6">
-          {logs.length === 0 ? (
+          {filteredLogs.length === 0 ? (
             <div className="flex items-center justify-center h-full text-muted-foreground">
               <div className="text-center">
                 <Terminal className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                <p>No logs available</p>
-                <p className="text-sm">Logs will appear here during deployment</p>
+                <p>{logs.length === 0 ? "No logs available" : "No logs match your filter"}</p>
+                <p className="text-sm">
+                  {logs.length === 0 ? "Logs will appear here during deployment" : "Try adjusting your search or filter"}
+                </p>
               </div>
             </div>
           ) : (
             <div className="space-y-2">
-              {logs.map((log, index) => (
+              {filteredLogs.map((log, index) => (
                 <div key={log.id}>
                   <div className="flex items-start gap-3 py-2">
                     <Badge className={`${getLevelColor(log.level)} text-xs shrink-0`}>
@@ -214,7 +255,7 @@ export function DeploymentLogs({ deploymentId, isActive = false }: DeploymentLog
                       </p>
                     </div>
                   </div>
-                  {index < logs.length - 1 && <Separator className="my-1" />}
+                  {index < filteredLogs.length - 1 && <Separator className="my-1" />}
                 </div>
               ))}
               <div className="flex items-center justify-center py-4">

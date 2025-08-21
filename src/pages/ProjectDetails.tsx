@@ -7,6 +7,8 @@ import { DeploymentSkeleton } from "@/components/deployment-skeleton";
 import { LoadingSpinner } from "@/components/loading-spinner";
 import { DeploymentTimeline } from "@/components/deployment-timeline";
 import { DomainVerification } from "@/components/domain-verification";
+import { PerformanceMetrics } from "@/components/performance-metrics";
+import { UsageAnalytics } from "@/components/usage-analytics";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -297,8 +299,10 @@ export default function ProjectDetails() {
 
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-6">
+          <TabsList className="grid w-full grid-cols-8">
             <TabsTrigger value="overview">Overview</TabsTrigger>
+            <TabsTrigger value="analytics">Analytics</TabsTrigger>
+            <TabsTrigger value="performance">Performance</TabsTrigger>
             <TabsTrigger value="deployments">Timeline</TabsTrigger>
             <TabsTrigger value="logs">Live Logs</TabsTrigger>
             <TabsTrigger value="environment">Variables</TabsTrigger>
@@ -346,6 +350,14 @@ export default function ProjectDetails() {
             </div>
 
             <DeploymentLogs deploymentId={project.id} isActive={project.status === "building"} />
+          </TabsContent>
+
+          <TabsContent value="analytics" className="space-y-6">
+            <UsageAnalytics projectId={project.id} />
+          </TabsContent>
+
+          <TabsContent value="performance" className="space-y-6">
+            <PerformanceMetrics projectId={project.id} />
           </TabsContent>
 
           <TabsContent value="deployments" className="space-y-6">
