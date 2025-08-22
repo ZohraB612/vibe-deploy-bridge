@@ -5,8 +5,10 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Input } from "@/components/ui/input";
-import { Play, Pause, Download, Trash2, Terminal, Search, Filter } from "lucide-react";
+import { Play, Pause, Download, Trash2, Terminal, Search, Filter, RefreshCw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useDeploymentLogs } from "@/contexts/DeploymentLogsContext";
+import { LoadingSpinner } from "@/components/loading-spinner";
 
 interface LogEntry {
   id: string;
@@ -18,60 +20,109 @@ interface LogEntry {
 
 interface DeploymentLogsProps {
   deploymentId: string;
+  projectId: string;
   isActive?: boolean;
 }
 
-export function DeploymentLogs({ deploymentId, isActive = false }: DeploymentLogsProps) {
+export function DeploymentLogs({ deploymentId, projectId, isActive = false }: DeploymentLogsProps) {
+  // Real deployment logs context
+  const {
+    logs: realLogs,
+    isLoading,
+    isStreaming: contextIsStreaming,
+    error,
+    fetchLogs,
+    startLogStreaming,
+    stopLogStreaming,
+    clearLogs,
+    searchLogs,
+    filterLogs
+  } = useDeploymentLogs();
+
+  // Keep all original state management for UI functionality
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [isStreaming, setIsStreaming] = useState(isActive);
   const [autoScroll, setAutoScroll] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [levelFilter, setLevelFilter] = useState<LogEntry["level"] | "all">("all");
+  const [showOnlyErrors, setShowOnlyErrors] = useState(false);
+  const [isInitialized, setIsInitialized] = useState(false);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
 
-  // Mock log streaming simulation
+  // Sync real logs with local state (keeping original functionality)
+  useEffect(() => {
+    if (realLogs.length > 0) {
+      const transformedLogs: LogEntry[] = realLogs.map(log => ({
+        id: log.id,
+        timestamp: log.timestamp,
+        level: log.level as "info" | "warn" | "error" | "success",
+        message: log.message,
+        source: log.source
+      }));
+      setLogs(transformedLogs);
+    }
+  }, [realLogs]);
+
+  // Initialize real logs on mount
+  useEffect(() => {
+    if (!isInitialized) {
+      fetchLogs(deploymentId);
+      setIsInitialized(true);
+    }
+  }, [deploymentId, fetchLogs, isInitialized]);
+
+  // Enhanced log streaming with real + fallback mock simulation
   useEffect(() => {
     if (!isStreaming) return;
 
-    const interval = setInterval(() => {
-      const mockLogs: LogEntry[] = [
-        {
-          id: Date.now().toString(),
-          timestamp: new Date(),
-          level: "info",
-          message: "Starting deployment process...",
-          source: "deployer"
-        },
-        {
-          id: (Date.now() + 1).toString(),
-          timestamp: new Date(),
-          level: "info",
-          message: "Installing dependencies...",
-          source: "npm"
-        },
-        {
-          id: (Date.now() + 2).toString(),
-          timestamp: new Date(),
-          level: "success",
-          message: "Build completed successfully",
-          source: "webpack"
-        },
-        {
-          id: (Date.now() + 3).toString(),
-          timestamp: new Date(),
-          level: "warn",
-          message: "Some warnings during build process",
-          source: "webpack"
-        }
-      ];
+    // Start real log streaming
+    startLogStreaming(deploymentId);
 
-      const randomLog = mockLogs[Math.floor(Math.random() * mockLogs.length)];
-      setLogs(prev => [...prev, { ...randomLog, id: Date.now().toString() }]);
+    // Fallback mock logs for demo purposes when no real logs are available
+    const interval = setInterval(() => {
+      if (realLogs.length === 0) {
+        const mockLogs: LogEntry[] = [
+          {
+            id: Date.now().toString(),
+            timestamp: new Date(),
+            level: "info",
+            message: "Starting deployment process...",
+            source: "deployer"
+          },
+          {
+            id: (Date.now() + 1).toString(),
+            timestamp: new Date(),
+            level: "info",
+            message: "Installing dependencies...",
+            source: "npm"
+          },
+          {
+            id: (Date.now() + 2).toString(),
+            timestamp: new Date(),
+            level: "success",
+            message: "Build completed successfully",
+            source: "webpack"
+          },
+          {
+            id: (Date.now() + 3).toString(),
+            timestamp: new Date(),
+            level: "warn",
+            message: "Some warnings during build process",
+            source: "webpack"
+          }
+        ];
+
+        const randomLog = mockLogs[Math.floor(Math.random() * mockLogs.length)];
+        setLogs(prev => [...prev, { ...randomLog, id: Date.now().toString() }]);
+      }
     }, 2000);
 
-    return () => clearInterval(interval);
-  }, [isStreaming]);
+    return () => {
+      clearInterval(interval);
+      stopLogStreaming();
+    };
+  }, [isStreaming, deploymentId, startLogStreaming, stopLogStreaming, realLogs.length]);
 
   // Auto scroll to bottom
   useEffect(() => {
@@ -97,18 +148,38 @@ export function DeploymentLogs({ deploymentId, isActive = false }: DeploymentLog
   };
 
   const toggleStreaming = () => {
-    setIsStreaming(!isStreaming);
-    toast({
-      title: isStreaming ? "Logs paused" : "Logs resumed",
-      description: isStreaming ? "Real-time streaming stopped" : "Real-time streaming started"
-    });
+    const newStreamingState = !isStreaming;
+    setIsStreaming(newStreamingState);
+    
+    if (newStreamingState) {
+      startLogStreaming(deploymentId);
+      toast({
+        title: "Log streaming started",
+        description: "Real-time logs are now being displayed",
+      });
+    } else {
+      stopLogStreaming();
+      toast({
+        title: "Log streaming stopped", 
+        description: "Log streaming has been paused",
+      });
+    }
   };
 
-  const clearLogs = () => {
+  const clearAllLogs = () => {
     setLogs([]);
+    clearLogs(); // Clear real logs too
     toast({
       title: "Logs cleared",
       description: "All deployment logs have been cleared"
+    });
+  };
+
+  const handleRefresh = () => {
+    fetchLogs(deploymentId);
+    toast({
+      title: "Logs refreshed",
+      description: "Latest logs have been loaded",
     });
   };
 
@@ -132,15 +203,39 @@ export function DeploymentLogs({ deploymentId, isActive = false }: DeploymentLog
   };
 
   // Filter logs based on search query and level filter
-  const filteredLogs = logs.filter(log => {
-    const matchesSearch = searchQuery === "" || 
-      log.message.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      log.source?.toLowerCase().includes(searchQuery.toLowerCase());
+  // Enhanced filtering with real context support
+  const filteredLogs = (() => {
+    let result = logs;
     
-    const matchesLevel = levelFilter === "all" || log.level === levelFilter;
+    // Apply search filter (keeping original logic + real context search)
+    if (searchQuery !== "") {
+      result = result.filter(log => 
+        log.message.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (log.source?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false)
+      );
+      
+      // Also use real context search for more advanced filtering
+      const realSearchResults = searchLogs(searchQuery);
+      if (realSearchResults.length > 0 && realLogs.length > 0) {
+        const realSearchIds = new Set(realSearchResults.map(log => log.id));
+        result = result.filter(log => realSearchIds.has(log.id));
+      }
+    }
     
-    return matchesSearch && matchesLevel;
-  });
+    // Apply level filter (keeping original logic + real context filter)
+    if (levelFilter !== "all") {
+      result = result.filter(log => log.level === levelFilter);
+      
+      // Also apply real context level filter for enhanced filtering
+      const realFilterResults = filterLogs(levelFilter);
+      if (realFilterResults.length > 0 && realLogs.length > 0) {
+        const realFilterIds = new Set(realFilterResults.map(log => log.id));
+        result = result.filter(log => realFilterIds.has(log.id));
+      }
+    }
+    
+    return result;
+  })();
 
   return (
     <Card className="h-full">
@@ -185,7 +280,17 @@ export function DeploymentLogs({ deploymentId, isActive = false }: DeploymentLog
             <Button
               variant="outline"
               size="sm"
-              onClick={clearLogs}
+              onClick={handleRefresh}
+              disabled={isLoading}
+              className="h-8"
+            >
+              <RefreshCw className={`h-3 w-3 mr-1 ${isLoading ? 'animate-spin' : ''}`} />
+              Refresh
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={clearAllLogs}
               disabled={logs.length === 0}
               className="h-8"
             >
@@ -222,7 +327,30 @@ export function DeploymentLogs({ deploymentId, isActive = false }: DeploymentLog
       </CardHeader>
       <CardContent className="p-0 h-[400px]">
         <ScrollArea ref={scrollAreaRef} className="h-full px-6 pb-6">
-          {filteredLogs.length === 0 ? (
+          {isLoading && logs.length === 0 ? (
+            <div className="flex items-center justify-center h-full">
+              <div className="text-center">
+                <LoadingSpinner />
+                <p className="text-sm text-muted-foreground mt-2">Loading deployment logs...</p>
+              </div>
+            </div>
+          ) : error ? (
+            <div className="flex items-center justify-center h-full text-destructive">
+              <div className="text-center">
+                <Terminal className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                <p className="font-medium">Error loading logs</p>
+                <p className="text-sm">{error}</p>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={handleRefresh}
+                  className="mt-2"
+                >
+                  Try Again
+                </Button>
+              </div>
+            </div>
+          ) : filteredLogs.length === 0 ? (
             <div className="flex items-center justify-center h-full text-muted-foreground">
               <div className="text-center">
                 <Terminal className="h-12 w-12 mx-auto mb-4 opacity-50" />

@@ -14,7 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Camera, Save, X } from "lucide-react";
-import { useUser } from "@/contexts/UserContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 
 interface ProfileDialogProps {
@@ -23,7 +23,7 @@ interface ProfileDialogProps {
 }
 
 export function ProfileDialog({ open, onOpenChange }: ProfileDialogProps) {
-  const { user, updateProfile } = useUser();
+  const { user, updateProfile } = useAuth();
   const { toast } = useToast();
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState({
@@ -31,7 +31,7 @@ export function ProfileDialog({ open, onOpenChange }: ProfileDialogProps) {
     email: user?.email || "",
   });
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!formData.name.trim()) {
       toast({
         title: "Error",
@@ -41,10 +41,19 @@ export function ProfileDialog({ open, onOpenChange }: ProfileDialogProps) {
       return;
     }
 
-    updateProfile({
+    const result = await updateProfile({
       name: formData.name.trim(),
-      email: formData.email.trim(),
+      email: formData.email.trim()
     });
+
+    if (result.error) {
+      toast({
+        title: "Update failed",
+        description: result.error.message,
+        variant: "destructive",
+      });
+      return;
+    }
 
     toast({
       title: "Profile updated",
@@ -62,7 +71,8 @@ export function ProfileDialog({ open, onOpenChange }: ProfileDialogProps) {
     setIsEditing(false);
   };
 
-  const getInitials = (name: string) => {
+  const getInitials = (name: string | undefined) => {
+    if (!name) return "U";
     return name
       .split(" ")
       .map(n => n[0])
@@ -70,6 +80,22 @@ export function ProfileDialog({ open, onOpenChange }: ProfileDialogProps) {
       .toUpperCase()
       .slice(0, 2);
   };
+
+  // For now, we'll use a default "free" plan since Supabase user doesn't have plan info
+  const userPlan = "free";
+  
+  // Safe date creation with fallback
+  const getMemberSince = () => {
+    try {
+      if (user?.created_at) return new Date(user.created_at);
+      if (user?.profile?.created_at) return new Date(user.profile.created_at);
+      return new Date();
+    } catch {
+      return new Date();
+    }
+  };
+  
+  const memberSince = getMemberSince();
 
   const getPlanColor = (plan: string) => {
     switch (plan) {
@@ -131,13 +157,13 @@ export function ProfileDialog({ open, onOpenChange }: ProfileDialogProps) {
                 <div className="flex-1">
                   <div className="flex items-center gap-3 mb-2">
                     <h3 className="text-xl font-semibold">{user.name}</h3>
-                    <Badge className={`${getPlanColor(user.plan)} text-xs`}>
-                      {user.plan.toUpperCase()}
+                    <Badge className={`${getPlanColor(userPlan)} text-xs`}>
+                      {userPlan.toUpperCase()}
                     </Badge>
                   </div>
                   <p className="text-muted-foreground">{user.email}</p>
                   <p className="text-sm text-muted-foreground">
-                    Member since {user.joinedAt.toLocaleDateString()}
+                    Member since {memberSince.toLocaleDateString()}
                   </p>
                 </div>
               </div>
@@ -192,8 +218,8 @@ export function ProfileDialog({ open, onOpenChange }: ProfileDialogProps) {
             <CardHeader>
               <div className="flex items-center justify-between">
                 <CardTitle className="text-lg">Current Plan</CardTitle>
-                <Badge className={`${getPlanColor(user.plan)}`}>
-                  {user.plan.toUpperCase()}
+                <Badge className={`${getPlanColor(userPlan)}`}>
+                  {userPlan.toUpperCase()}
                 </Badge>
               </div>
             </CardHeader>
@@ -203,7 +229,7 @@ export function ProfileDialog({ open, onOpenChange }: ProfileDialogProps) {
                   <div>
                     <h4 className="font-medium mb-2">Plan Features</h4>
                     <ul className="space-y-1">
-                      {getPlanFeatures(user.plan).map((feature, index) => (
+                      {getPlanFeatures(userPlan).map((feature, index) => (
                         <li key={index} className="text-sm text-muted-foreground flex items-center">
                           <div className="w-1.5 h-1.5 bg-primary rounded-full mr-3" />
                           {feature}
@@ -216,7 +242,7 @@ export function ProfileDialog({ open, onOpenChange }: ProfileDialogProps) {
                     <div className="space-y-2 text-sm">
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Projects</span>
-                        <span>2 / {user.plan === "free" ? "3" : "∞"}</span>
+                        <span>2 / {userPlan === "free" ? "3" : "∞"}</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Deployments</span>
@@ -229,7 +255,7 @@ export function ProfileDialog({ open, onOpenChange }: ProfileDialogProps) {
                     </div>
                   </div>
                 </div>
-                {user.plan === "free" && (
+                {userPlan === "free" && (
                   <div className="pt-4 border-t">
                     <Button className="w-full md:w-auto">
                       Upgrade to Pro

@@ -2,55 +2,49 @@ import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
-import { Activity, Clock, Zap, TrendingUp, AlertTriangle } from "lucide-react";
-
-interface PerformanceData {
-  timestamp: string;
-  uptime: number;
-  loadTime: number;
-  responseTime: number;
-}
+import { Activity, Clock, Zap, TrendingUp, AlertTriangle, RefreshCw, Play, Pause } from "lucide-react";
+import { useAnalytics } from "@/contexts/AnalyticsContext";
+import { LoadingSpinner } from "@/components/loading-spinner";
 
 interface PerformanceMetricsProps {
   projectId: string;
 }
 
 export function PerformanceMetrics({ projectId }: PerformanceMetricsProps) {
-  const [currentUptime, setCurrentUptime] = useState(99.8);
-  const [avgLoadTime, setAvgLoadTime] = useState(1.2);
-  const [avgResponseTime, setAvgResponseTime] = useState(85);
-  const [performanceData, setPerformanceData] = useState<PerformanceData[]>([]);
+  const {
+    performanceData,
+    currentUptime,
+    avgLoadTime,
+    avgResponseTime,
+    isLoadingPerformance,
+    fetchPerformanceMetrics,
+    startRealTimeMonitoring,
+    stopRealTimeMonitoring
+  } = useAnalytics();
 
-  // Mock data generation
+  const [timeRange, setTimeRange] = useState<'1h' | '24h' | '7d' | '30d'>('24h');
+  const [isMonitoring, setIsMonitoring] = useState(false);
+
+  // Load performance data on mount and when timeRange changes
   useEffect(() => {
-    const generateMockData = () => {
-      const now = new Date();
-      const data: PerformanceData[] = [];
-      
-      for (let i = 23; i >= 0; i--) {
-        const timestamp = new Date(now.getTime() - i * 60 * 60 * 1000);
-        data.push({
-          timestamp: timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          uptime: 98 + Math.random() * 2,
-          loadTime: 0.8 + Math.random() * 0.8,
-          responseTime: 60 + Math.random() * 50,
-        });
-      }
-      return data;
-    };
+    fetchPerformanceMetrics(projectId, timeRange);
+  }, [projectId, timeRange, fetchPerformanceMetrics]);
 
-    setPerformanceData(generateMockData());
+  const handleRefresh = () => {
+    fetchPerformanceMetrics(projectId, timeRange);
+  };
 
-    // Simulate real-time updates
-    const interval = setInterval(() => {
-      setCurrentUptime(prev => Math.max(95, Math.min(100, prev + (Math.random() - 0.5) * 0.2)));
-      setAvgLoadTime(prev => Math.max(0.5, Math.min(3, prev + (Math.random() - 0.5) * 0.1)));
-      setAvgResponseTime(prev => Math.max(30, Math.min(200, prev + (Math.random() - 0.5) * 10)));
-    }, 5000);
-
-    return () => clearInterval(interval);
-  }, [projectId]);
+  const toggleMonitoring = () => {
+    if (isMonitoring) {
+      stopRealTimeMonitoring();
+    } else {
+      startRealTimeMonitoring(projectId);
+    }
+    setIsMonitoring(!isMonitoring);
+  };
 
   const getUptimeStatus = (uptime: number) => {
     if (uptime >= 99.5) return { color: "bg-success", text: "Excellent" };
@@ -67,8 +61,70 @@ export function PerformanceMetrics({ projectId }: PerformanceMetricsProps) {
   const uptimeStatus = getUptimeStatus(currentUptime);
   const loadTimeStatus = getLoadTimeStatus(avgLoadTime);
 
+  if (isLoadingPerformance && performanceData.length === 0) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <LoadingSpinner />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
+      {/* Header Controls */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div className="flex items-center gap-4">
+          <h3 className="text-lg font-semibold">Performance Metrics</h3>
+          {isMonitoring && (
+            <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+              <Activity className="h-3 w-3 mr-1" />
+              Live Monitoring
+            </Badge>
+          )}
+        </div>
+        
+        <div className="flex items-center gap-2">
+          <Select value={timeRange} onValueChange={(value: '1h' | '24h' | '7d' | '30d') => setTimeRange(value)}>
+            <SelectTrigger className="w-32">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="1h">Last Hour</SelectItem>
+              <SelectItem value="24h">Last 24h</SelectItem>
+              <SelectItem value="7d">Last 7d</SelectItem>
+              <SelectItem value="30d">Last 30d</SelectItem>
+            </SelectContent>
+          </Select>
+          
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleRefresh}
+            disabled={isLoadingPerformance}
+          >
+            <RefreshCw className={`h-4 w-4 ${isLoadingPerformance ? 'animate-spin' : ''}`} />
+          </Button>
+          
+          <Button
+            variant={isMonitoring ? "destructive" : "default"}
+            size="sm"
+            onClick={toggleMonitoring}
+          >
+            {isMonitoring ? (
+              <>
+                <Pause className="h-4 w-4 mr-1" />
+                Stop
+              </>
+            ) : (
+              <>
+                <Play className="h-4 w-4 mr-1" />
+                Monitor
+              </>
+            )}
+          </Button>
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">

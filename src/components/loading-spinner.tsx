@@ -1,3 +1,4 @@
+import React from "react";
 import { cn } from "@/lib/utils";
 import { Loader2 } from "lucide-react";
 
@@ -7,7 +8,7 @@ interface LoadingSpinnerProps {
   text?: string;
 }
 
-export function LoadingSpinner({ size = "md", className, text }: LoadingSpinnerProps) {
+export const LoadingSpinner = React.memo(function LoadingSpinner({ size = "md", className, text }: LoadingSpinnerProps) {
   const sizeClasses = {
     sm: "h-4 w-4",
     md: "h-6 w-6", 
@@ -20,4 +21,4 @@ export function LoadingSpinner({ size = "md", className, text }: LoadingSpinnerP
       {text && <span className="text-sm text-muted-foreground">{text}</span>}
     </div>
   );
-}
+});

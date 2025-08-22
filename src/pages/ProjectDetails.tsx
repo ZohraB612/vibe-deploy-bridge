@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Layout } from "@/components/Layout";
+import { useProjects } from "@/contexts/ProjectContext";
 import { DeploymentLogs } from "@/components/deployment-logs";
 import { EnvironmentVariables } from "@/components/environment-variables";
 import { DeploymentSkeleton } from "@/components/deployment-skeleton";
@@ -64,20 +65,34 @@ export default function ProjectDetails() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { getProject } = useProjects();
   
-  // Mock project data - in real app, fetch from API
-  const [project] = useState<Project>({
-    id: id || "1",
-    name: "My Awesome App",
-    domain: "my-awesome-app.lovableapp.com",
-    status: "active",
-    lastDeployed: new Date(Date.now() - 2 * 60 * 60 * 1000), // 2 hours ago
-    deployments: 23,
-    framework: "React + Vite",
-    branch: "main",
-    buildTime: "2m 34s",
-    size: "1.2 MB"
-  });
+  const project = getProject(id || "");
+  
+  // If project not found, show error
+  if (!project) {
+    return (
+      <Layout>
+        <div className="container mx-auto px-4 py-8">
+          <Card className="max-w-md mx-auto">
+            <CardHeader className="text-center">
+              <AlertCircle className="h-8 w-8 text-destructive mx-auto mb-2" />
+              <CardTitle>Project Not Found</CardTitle>
+            </CardHeader>
+            <CardContent className="text-center">
+              <p className="text-muted-foreground mb-4">
+                The project you're looking for doesn't exist or may have been deleted.
+              </p>
+              <Button onClick={() => navigate("/dashboard")}>
+                <ArrowLeft className="h-4 w-4 mr-2" />
+                Back to Dashboard
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      </Layout>
+    );
+  }
 
   const [activeTab, setActiveTab] = useState("overview");
   const [editingDeployment, setEditingDeployment] = useState<Deployment | null>(null);
@@ -270,14 +285,14 @@ export default function ProjectDetails() {
                 <span className="ml-1 capitalize">{project.status}</span>
               </Badge>
             </div>
-            <div className="flex items-center gap-4 text-sm text-muted-foreground">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-sm text-muted-foreground">
               <div className="flex items-center gap-1">
                 <Globe className="h-4 w-4" />
                 <span>{project.domain}</span>
               </div>
               <div className="flex items-center gap-1">
                 <GitBranch className="h-4 w-4" />
-                <span>{project.branch}</span>
+                <span>{project.branch || "main"}</span>
               </div>
               <div className="flex items-center gap-1">
                 <Clock className="h-4 w-4" />
@@ -326,7 +341,7 @@ export default function ProjectDetails() {
                   <CardTitle className="text-sm font-medium text-muted-foreground">Framework</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold text-foreground">{project.framework}</div>
+                  <div className="text-lg font-bold text-foreground">{project.framework || "Static Site"}</div>
                 </CardContent>
               </Card>
               
@@ -335,7 +350,7 @@ export default function ProjectDetails() {
                   <CardTitle className="text-sm font-medium text-muted-foreground">Build Time</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold text-foreground">{project.buildTime}</div>
+                  <div className="text-2xl font-bold text-foreground">{project.buildTime || "N/A"}</div>
                 </CardContent>
               </Card>
               
@@ -344,7 +359,7 @@ export default function ProjectDetails() {
                   <CardTitle className="text-sm font-medium text-muted-foreground">Bundle Size</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold text-foreground">{project.size}</div>
+                  <div className="text-2xl font-bold text-foreground">{project.size || "N/A"}</div>
                 </CardContent>
               </Card>
             </div>

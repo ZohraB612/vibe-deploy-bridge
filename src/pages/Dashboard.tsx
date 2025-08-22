@@ -1,39 +1,15 @@
-import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Layout } from "@/components/Layout";
 import { DashboardSkeleton } from "@/components/dashboard-skeleton";
-import { LoadingSpinner } from "@/components/loading-spinner";
-import { Plus, ExternalLink, Clock, CheckCircle, AlertCircle, Zap } from "lucide-react";
+import { useProjects } from "@/contexts/ProjectContext";
+import { useAWSStatus } from "@/hooks/use-aws-status";
+import { Plus, ExternalLink, Clock, CheckCircle, AlertCircle, Zap, RefreshCw, Globe } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
+import { useEffect } from "react";
 
-const mockProjects = [
-  {
-    id: 1,
-    name: "My Portfolio Site",
-    domain: "my-portfolio.netlify.app",
-    status: "deployed",
-    lastDeployed: "2 hours ago",
-    deployments: 12,
-  },
-  {
-    id: 2,
-    name: "Blog Website", 
-    domain: "my-blog.com",
-    status: "deploying",
-    lastDeployed: "5 minutes ago",
-    deployments: 8,
-  },
-  {
-    id: 3,
-    name: "E-commerce Store",
-    domain: "shop.example.com", 
-    status: "failed",
-    lastDeployed: "1 day ago",
-    deployments: 3,
-  },
-];
+
 
 const getStatusIcon = (status: string) => {
   switch (status) {
@@ -63,26 +39,20 @@ const getStatusColor = (status: string) => {
 
 export default function Dashboard() {
   const navigate = useNavigate();
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { projects, isLoading, error, refreshProjects } = useProjects();
+  const { hasAWSConnection, isLoading: isAWSLoading } = useAWSStatus();
 
-  // Simulate data loading
+  // Redirect to AWS setup if user doesn't have AWS connection
   useEffect(() => {
-    const loadData = async () => {
-      try {
-        setIsLoading(true);
-        // Simulate API call
-        await new Promise(resolve => setTimeout(resolve, 1500));
-        setError(null);
-      } catch (err) {
-        setError("Failed to load dashboard data");
-      } finally {
-        setIsLoading(false);
-      }
-    };
+    if (!isAWSLoading && hasAWSConnection === false) {
+      navigate('/setup/aws', { replace: true });
+    }
+  }, [hasAWSConnection, isAWSLoading, navigate]);
 
-    loadData();
-  }, []);
+  // Don't render dashboard if still checking AWS status or if redirecting
+  if (isAWSLoading || hasAWSConnection === false) {
+    return null;
+  }
   if (error) {
     return (
       <Layout>
@@ -94,9 +64,15 @@ export default function Dashboard() {
             </CardHeader>
             <CardContent className="text-center">
               <p className="text-muted-foreground mb-4">{error}</p>
-              <Button onClick={() => window.location.reload()}>
-                Try Again
-              </Button>
+              <div className="flex gap-2">
+                <Button onClick={refreshProjects}>
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  Try Again
+                </Button>
+                <Button variant="outline" onClick={() => window.location.reload()}>
+                  Reload Page
+                </Button>
+              </div>
             </CardContent>
           </Card>
         </div>
@@ -143,8 +119,8 @@ export default function Dashboard() {
               <Zap className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">3</div>
-              <p className="text-xs text-muted-foreground">+1 from last month</p>
+              <div className="text-2xl font-bold">{projects.length}</div>
+              <p className="text-xs text-muted-foreground">Active projects</p>
             </CardContent>
           </Card>
           <Card>
@@ -153,7 +129,9 @@ export default function Dashboard() {
               <CheckCircle className="h-4 w-4 text-success" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">2</div>
+              <div className="text-2xl font-bold">
+                {projects.filter(p => p.status === "deployed" || p.status === "deploying").length}
+              </div>
               <p className="text-xs text-muted-foreground">Running smoothly</p>
             </CardContent>
           </Card>
@@ -163,8 +141,51 @@ export default function Dashboard() {
               <ExternalLink className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">23</div>
+              <div className="text-2xl font-bold">
+                {projects.reduce((total, project) => total + project.deployments, 0)}
+              </div>
               <p className="text-xs text-muted-foreground">Successful deploys</p>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Quick Actions */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+          <Card className="hover:shadow-soft transition-all cursor-pointer" onClick={() => navigate('/domains')}>
+            <CardContent className="p-6">
+              <div className="flex items-center gap-4">
+                <div className="rounded-full bg-blue-100 p-3">
+                  <Globe className="h-8 w-8 text-blue-600" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-lg font-semibold">Domain Management</h3>
+                  <p className="text-muted-foreground text-sm">
+                    Manage your domains, DNS records, and SSL certificates
+                  </p>
+                </div>
+                <Button variant="outline" size="sm">
+                  Manage Domains
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+          
+          <Card className="hover:shadow-soft transition-all cursor-pointer" onClick={() => navigate('/deploy')}>
+            <CardContent className="p-6">
+              <div className="flex items-center gap-4">
+                <div className="rounded-full bg-green-100 p-3">
+                  <Zap className="h-8 w-8 text-green-600" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-lg font-semibold">New Deployment</h3>
+                  <p className="text-muted-foreground text-sm">
+                    Deploy a new application or update existing ones
+                  </p>
+                </div>
+                <Button variant="outline" size="sm">
+                  Deploy Now
+                </Button>
+              </div>
             </CardContent>
           </Card>
         </div>
@@ -173,7 +194,7 @@ export default function Dashboard() {
         <div className="space-y-4">
           <h2 className="text-xl font-semibold">Recent Projects</h2>
           
-          {mockProjects.length === 0 ? (
+          {projects.length === 0 ? (
             <Card className="text-center py-12">
               <CardContent>
                 <div className="flex flex-col items-center space-y-4">
@@ -197,7 +218,7 @@ export default function Dashboard() {
             </Card>
           ) : (
             <div className="grid grid-cols-1 gap-4">
-              {mockProjects.map((project) => (
+              {projects.map((project) => (
                 <Card key={project.id} className="hover:shadow-soft transition-all">
                   <CardContent className="p-6">
                     <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
@@ -215,21 +236,28 @@ export default function Dashboard() {
                             {project.domain}
                           </span>
                           <span className="hidden sm:block">•</span>
-                          <span>Last deployed {project.lastDeployed}</span>
+                          <span>Last deployed {project.lastDeployed.toLocaleDateString()}</span>
                           <span className="hidden sm:block">•</span>
                           <span>{project.deployments} deployments</span>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                      <Button 
-                        variant="outline" 
-                        size="sm"
-                        onClick={() => navigate(`/project/${project.id}`)}
-                      >
-                        View Details
-                      </Button>
-                        <Button variant="outline" size="sm">
-                          <ExternalLink className="h-4 w-4" />
+                      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => navigate(`/project/${project.id}`)}
+                          className="w-full sm:w-auto"
+                        >
+                          View Details
+                        </Button>
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          className="sm:w-auto"
+                          onClick={() => window.open(`https://${project.domain}`, '_blank')}
+                        >
+                          <ExternalLink className="h-4 w-4 sm:mr-0 mr-2" />
+                          <span className="sm:hidden">Visit Site</span>
                         </Button>
                       </div>
                     </div>

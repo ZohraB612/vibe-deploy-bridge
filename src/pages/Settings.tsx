@@ -4,6 +4,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Layout } from "@/components/Layout";
+import { useAWS } from "@/contexts/AWSContext";
+import { Link } from "react-router-dom";
 import { 
   User, 
   Cloud, 
@@ -16,6 +18,8 @@ import {
 } from "lucide-react";
 
 export default function Settings() {
+  const { connection, disconnect } = useAWS();
+  
   return (
     <Layout>
       <div className="container mx-auto px-4 py-8 max-w-4xl">
@@ -76,18 +80,40 @@ export default function Settings() {
                   </div>
                   <div>
                     <p className="font-medium">AWS Account</p>
-                    <p className="text-sm text-muted-foreground">Connected via IAM Role</p>
+                    {connection.isConnected ? (
+                      <div>
+                        <p className="text-sm text-muted-foreground">Account: {connection.accountId}</p>
+                        <p className="text-xs text-muted-foreground">Region: {connection.region}</p>
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">Not connected</p>
+                    )}
                   </div>
                 </div>
                 <div className="flex items-center space-x-2">
-                  <Badge className="bg-success/10 text-success border-success/20">
-                    <CheckCircle className="h-3 w-3 mr-1" />
-                    Connected
-                  </Badge>
-                  <Button variant="outline" size="sm">
-                    <ExternalLink className="h-4 w-4 mr-2" />
-                    View Role
-                  </Button>
+                  {connection.isConnected ? (
+                    <>
+                      <Badge className="bg-success/10 text-success border-success/20">
+                        <CheckCircle className="h-3 w-3 mr-1" />
+                        Connected
+                      </Badge>
+                      <Button variant="outline" size="sm" onClick={disconnect}>
+                        Disconnect
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <Badge className="bg-destructive/10 text-destructive border-destructive/20">
+                        Not Connected
+                      </Badge>
+                      <Button variant="outline" size="sm" asChild>
+                        <Link to="/setup/aws">
+                          <ExternalLink className="h-4 w-4 mr-2" />
+                          Connect AWS
+                        </Link>
+                      </Button>
+                    </>
+                  )}
                 </div>
               </div>
 
@@ -103,9 +129,19 @@ export default function Settings() {
                 </div>
               </div>
 
-              <Button variant="outline" className="w-full">
-                Reconnect AWS Account
-              </Button>
+              {connection.isConnected ? (
+                <Button variant="outline" className="w-full" asChild>
+                  <Link to="/setup/aws">
+                    Reconfigure AWS Account
+                  </Link>
+                </Button>
+              ) : (
+                <Button variant="outline" className="w-full" asChild>
+                  <Link to="/setup/aws">
+                    Connect AWS Account
+                  </Link>
+                </Button>
+              )}
             </CardContent>
           </Card>
 

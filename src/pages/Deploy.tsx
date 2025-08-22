@@ -1,5 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
+import { useProjects } from "@/contexts/ProjectContext";
+import { useAWS } from "@/contexts/AWSContext";
+import { useAWSStatus } from "@/hooks/use-aws-status";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -20,6 +23,7 @@ import {
   Cloud
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { Link, useNavigate } from "react-router-dom";
 
 type DeploymentStep = 'upload' | 'configure' | 'deploy' | 'success';
 
@@ -44,6 +48,22 @@ export default function Deploy() {
   const [errors, setErrors] = useState<FormErrors>({});
   const [isValidating, setIsValidating] = useState(false);
   const { toast } = useToast();
+  const { addProject } = useProjects();
+  const { connection, deployToS3, deployWithCloudFormation } = useAWS();
+  const { hasAWSConnection, isLoading: isAWSLoading } = useAWSStatus();
+  const navigate = useNavigate();
+
+  // Redirect to AWS setup if user doesn't have AWS connection
+  useEffect(() => {
+    if (!isAWSLoading && hasAWSConnection === false) {
+      navigate('/setup/aws', { replace: true });
+    }
+  }, [hasAWSConnection, isAWSLoading, navigate]);
+
+  // Don't render deploy page if still checking AWS status or if redirecting
+  if (isAWSLoading || hasAWSConnection === false) {
+    return null;
+  }
   
   const [projectConfig, setProjectConfig] = useState<ProjectConfig>({
     name: '',
@@ -51,6 +71,7 @@ export default function Deploy() {
     domain: '',
     files: []
   });
+  const [deployedUrl, setDeployedUrl] = useState<string>('');
 
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault();
@@ -174,8 +195,19 @@ export default function Deploy() {
     return Object.keys(newErrors).length === 0;
   };
 
-  const simulateDeployment = async () => {
+  const startRealDeployment = async () => {
     setIsValidating(true);
+    
+    // Check AWS connection
+    if (!connection) {
+      setIsValidating(false);
+      toast({
+        title: "AWS Connection Required",
+        description: "Please connect your AWS account before deploying",
+        variant: "destructive"
+      });
+      return;
+    }
     
     // Validate configuration
     if (!validateConfiguration()) {
@@ -192,26 +224,59 @@ export default function Deploy() {
     setIsDeploying(true);
     setCurrentStep('deploy');
     
-    const steps = [
-      "Validating your application files...",
-      "Creating cloud storage bucket...",
-      "Uploading your application...", 
-      "Configuring serverless functions...",
-      "Setting up custom domain...",
-      "Finalizing deployment..."
-    ];
-    
-    for (let i = 0; i < steps.length; i++) {
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      setDeploymentProgress((i + 1) / steps.length * 100);
+    try {
+      // Update progress
+      setDeploymentProgress(20);
+      
+      // Start real AWS deployment
+      const deploymentResult = await deployToS3(
+        projectConfig.name,
+        projectConfig.files,
+        projectConfig.domain
+      );
+      
+      setDeploymentProgress(80);
+      
+      if (!deploymentResult.success) {
+        throw new Error(deploymentResult.error || "Deployment failed");
+      }
+      
+      setDeploymentProgress(100);
+      
+      // Add the project to the database
+      const newProject = await addProject({
+        name: projectConfig.name,
+        domain: deploymentResult.url || projectConfig.domain,
+        status: "deployed",
+        framework: "Static Site",
+        branch: "main",
+        buildTime: "Real AWS deployment",
+        size: `${Math.round(projectConfig.files.reduce((total, file) => total + file.size, 0) / (1024 * 1024) * 10) / 10} MB`,
+        awsBucket: deploymentResult.bucketName,
+        awsRegion: connection.region
+      });
+
+      if (!newProject) {
+        throw new Error("Failed to save project to database");
+      }
+      
+      setDeployedUrl(deploymentResult.url || projectConfig.domain);
+      setIsDeploying(false);
+      setCurrentStep('success');
+      
+      toast({
+        title: "Deployment successful!",
+        description: "Your application is now live on AWS with CloudFront!",
+      });
+    } catch (error: any) {
+      setIsDeploying(false);
+      setCurrentStep('configure');
+      toast({
+        title: "Deployment failed",
+        description: error.message || "An error occurred during deployment",
+        variant: "destructive"
+      });
     }
-    
-    setIsDeploying(false);
-    setCurrentStep('success');
-    toast({
-      title: "Deployment successful!",
-      description: "Your application is now live on the web",
-    });
   };
 
   const renderUploadStep = () => (
@@ -372,6 +437,15 @@ export default function Deploy() {
           </AlertDescription>
         </Alert>
 
+        {!connection.isConnected && (
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>
+              AWS connection required for deployment. <Link to="/setup/aws" className="underline">Connect your AWS account</Link> before proceeding.
+            </AlertDescription>
+          </Alert>
+        )}
+
         <div className="flex justify-between">
           <Button 
             variant="outline" 
@@ -381,8 +455,8 @@ export default function Deploy() {
             Back
           </Button>
           <Button 
-            onClick={simulateDeployment}
-            disabled={!projectConfig.name.trim() || isValidating}
+                            onClick={startRealDeployment}
+                          disabled={!projectConfig.name.trim() || isValidating || !connection}
             className="bg-gradient-primary hover:shadow-glow min-w-32"
           >
             {isValidating ? (
@@ -419,15 +493,15 @@ export default function Deploy() {
 
         <div className="space-y-3">
           {[
-            "Validating your application files...",
-            "Creating cloud storage bucket...",
-            "Uploading your application...", 
-            "Configuring serverless functions...",
-            "Setting up custom domain...",
-            "Finalizing deployment..."
+            { text: "Validating your application files...", threshold: 10 },
+            { text: "Creating S3 bucket and configuring...", threshold: 30 },
+            { text: "Uploading files to AWS S3...", threshold: 60 }, 
+            { text: "Configuring static website hosting...", threshold: 80 },
+            { text: "Setting up public access...", threshold: 95 },
+            { text: "Finalizing deployment...", threshold: 100 }
           ].map((step, index) => {
-            const isCompleted = deploymentProgress > (index / 6) * 100;
-            const isCurrent = deploymentProgress >= (index / 6) * 100 && deploymentProgress < ((index + 1) / 6) * 100;
+            const isCompleted = deploymentProgress >= step.threshold;
+            const isCurrent = deploymentProgress < step.threshold && (index === 0 || deploymentProgress >= (index > 0 ? [10, 30, 60, 80, 95][index - 1] : 0));
             
             return (
               <div key={index} className="flex items-center gap-3">
@@ -439,7 +513,7 @@ export default function Deploy() {
                   <div className="h-4 w-4 rounded-full border-2 border-muted" />
                 )}
                 <span className={`text-sm ${isCompleted ? 'text-success' : isCurrent ? 'text-foreground' : 'text-muted-foreground'}`}>
-                  {step}
+                  {step.text}
                 </span>
               </div>
             );
@@ -472,9 +546,16 @@ export default function Deploy() {
             <Label className="text-sm font-medium">Live URL</Label>
             <div className="flex items-center gap-2 mt-1">
               <code className="text-sm bg-background px-2 py-1 rounded border flex-1">
-                https://{projectConfig.name.toLowerCase().replace(/\s+/g, '-')}.deployhub.app
+                {deployedUrl || `https://${projectConfig.name.toLowerCase().replace(/\s+/g, '-')}.deployhub.app`}
               </code>
-              <Button size="sm" variant="outline">
+              <Button 
+                size="sm" 
+                variant="outline"
+                onClick={() => {
+                  navigator.clipboard.writeText(deployedUrl || `https://${projectConfig.name.toLowerCase().replace(/\s+/g, '-')}.deployhub.app`);
+                  toast({ title: "URL copied to clipboard!" });
+                }}
+              >
                 Copy
               </Button>
             </div>
@@ -490,19 +571,27 @@ export default function Deploy() {
           )}
         </div>
 
-        <div className="flex flex-col sm:flex-row gap-3">
-          <Button className="flex-1" asChild>
-            <a href={`https://${projectConfig.name.toLowerCase().replace(/\s+/g, '-')}.deployhub.app`} target="_blank" rel="noopener noreferrer">
+        <div className="flex flex-col gap-3">
+          <Button className="w-full" asChild>
+            <a href={deployedUrl || `https://${projectConfig.name.toLowerCase().replace(/\s+/g, '-')}.deployhub.app`} target="_blank" rel="noopener noreferrer">
               View Live Site
             </a>
           </Button>
-          <Button variant="outline" className="flex-1" onClick={() => {
-            setCurrentStep('upload');
-            setProjectConfig({ name: '', description: '', domain: '', files: [] });
-            setDeploymentProgress(0);
-          }}>
-            Deploy Another
-          </Button>
+          <div className="grid grid-cols-2 gap-3">
+            <Button variant="outline" className="w-full" asChild>
+              <Link to="/dashboard">
+                Go to Dashboard
+              </Link>
+            </Button>
+            <Button variant="outline" className="w-full" onClick={() => {
+              setCurrentStep('upload');
+              setProjectConfig({ name: '', description: '', domain: '', files: [] });
+              setDeploymentProgress(0);
+              setDeployedUrl('');
+            }}>
+              Deploy Another
+            </Button>
+          </div>
         </div>
       </CardContent>
     </Card>

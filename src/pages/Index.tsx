@@ -13,6 +13,10 @@ import {
   Star
 } from "lucide-react";
 import { Link } from "react-router-dom";
+import { useAuthRedirect } from "@/hooks/use-auth-redirect";
+import { useAuth } from "@/contexts/AuthContext";
+import { AuthDialog } from "@/components/auth/AuthDialog";
+import { useState } from "react";
 import heroImage from "@/assets/hero-deployment.jpg";
 
 const features = [
@@ -73,6 +77,11 @@ const testimonials = [
 ];
 
 export default function Index() {
+  // Redirect authenticated users to dashboard
+  useAuthRedirect();
+  const { isAuthenticated } = useAuth();
+  const [showAuth, setShowAuth] = useState(false);
+  
   return (
     <div className="min-h-screen">
       {/* Header */}
@@ -87,9 +96,15 @@ export default function Index() {
             </div>
             
             <div className="flex items-center space-x-4">
-              <Link to="/dashboard">
-                <Button variant="ghost">Dashboard</Button>
-              </Link>
+              {isAuthenticated ? (
+                <Link to="/dashboard">
+                  <Button variant="ghost">Dashboard</Button>
+                </Link>
+              ) : (
+                <Button variant="ghost" onClick={() => setShowAuth(true)}>
+                  Sign In
+                </Button>
+              )}
               <Link to="/setup/aws">
                 <Button variant="hero">Get Started</Button>
               </Link>
@@ -351,6 +366,9 @@ export default function Index() {
           </div>
         </div>
       </footer>
+
+      {/* Auth Dialog */}
+      <AuthDialog open={showAuth} onOpenChange={setShowAuth} />
     </div>
   );
 }

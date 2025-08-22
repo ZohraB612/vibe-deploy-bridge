@@ -1,7 +1,7 @@
 import * as React from "react"
 import * as ToastPrimitives from "@radix-ui/react-toast"
 import { cva, type VariantProps } from "class-variance-authority"
-import { X } from "lucide-react"
+import { X, CheckCircle, AlertCircle, Info, AlertTriangle } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 
@@ -29,7 +29,10 @@ const toastVariants = cva(
       variant: {
         default: "border bg-background text-foreground",
         destructive:
-          "destructive group border-destructive bg-destructive text-destructive-foreground",
+          "destructive border-destructive bg-destructive text-destructive-foreground",
+        success: "border-green-200 bg-green-50 text-green-800",
+        warning: "border-yellow-200 bg-yellow-50 text-yellow-800",
+        info: "border-blue-200 bg-blue-50 text-blue-800",
       },
     },
     defaultVariants: {
@@ -114,12 +117,57 @@ type ToastProps = React.ComponentPropsWithoutRef<typeof Toast>
 
 type ToastActionElement = React.ReactElement<typeof ToastAction>
 
+// Enhanced toast component with icons
+const ToastWithIcon = React.forwardRef<
+  React.ElementRef<typeof Toast>,
+  ToastProps & { 
+    icon?: 'success' | 'error' | 'warning' | 'info' | 'default';
+    showIcon?: boolean;
+  }
+>(({ className, variant, icon, showIcon = true, children, ...props }, ref) => {
+  const getIcon = () => {
+    if (!showIcon) return null;
+    
+    const iconType = icon || variant;
+    const iconClasses = "h-5 w-5 mr-3 flex-shrink-0";
+    
+    switch (iconType) {
+      case 'success':
+        return <CheckCircle className={`${iconClasses} text-green-600`} />;
+      case 'destructive':
+        return <AlertCircle className={`${iconClasses} text-red-600`} />;
+      case 'warning':
+        return <AlertTriangle className={`${iconClasses} text-yellow-600`} />;
+      case 'info':
+        return <Info className={`${iconClasses} text-blue-600`} />;
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <Toast
+      ref={ref}
+      className={cn("flex items-start", className)}
+      variant={variant}
+      {...props}
+    >
+      {getIcon()}
+      <div className="flex-1">
+        {children}
+      </div>
+    </Toast>
+  );
+});
+ToastWithIcon.displayName = "ToastWithIcon";
+
 export {
   type ToastProps,
   type ToastActionElement,
   ToastProvider,
   ToastViewport,
   Toast,
+  ToastWithIcon,
   ToastTitle,
   ToastDescription,
   ToastClose,

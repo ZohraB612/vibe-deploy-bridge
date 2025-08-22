@@ -11,13 +11,13 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { User, Settings, LogOut, CreditCard, HelpCircle } from "lucide-react";
-import { useUser } from "@/contexts/UserContext";
-import { AuthDialog } from "./auth-dialog";
+import { useAuth } from "@/contexts/AuthContext";
+import { AuthDialog } from "./auth/AuthDialog";
 import { ProfileDialog } from "./profile-dialog";
 import { Link } from "react-router-dom";
 
 export function UserMenu() {
-  const { user, isAuthenticated, logout } = useUser();
+  const { user, isAuthenticated, signOut } = useAuth();
   const [showAuth, setShowAuth] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
 
@@ -70,16 +70,16 @@ export function UserMenu() {
           <DropdownMenuLabel className="font-normal">
             <div className="flex flex-col space-y-2">
               <div className="flex items-center justify-between">
-                <p className="text-sm font-medium leading-none">{user?.name}</p>
-                <Badge className={`text-xs ${getPlanColor(user?.plan || "free")}`}>
-                  {user?.plan?.toUpperCase()}
+                <p className="text-sm font-medium leading-none">{user?.profile?.name || user?.name || user?.email}</p>
+                <Badge className={`text-xs ${getPlanColor("free")}`}>
+                  FREE
                 </Badge>
               </div>
               <p className="text-xs leading-none text-muted-foreground">
                 {user?.email}
               </p>
               <p className="text-xs leading-none text-muted-foreground">
-                Joined {user?.joinedAt.toLocaleDateString()}
+                Joined {user?.created_at ? new Date(user.created_at).toLocaleDateString() : 'Recently'}
               </p>
             </div>
           </DropdownMenuLabel>
@@ -103,7 +103,7 @@ export function UserMenu() {
             <span>Help & Support</span>
           </DropdownMenuItem>
           <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={logout}>
+          <DropdownMenuItem onClick={() => signOut()}>
             <LogOut className="mr-2 h-4 w-4" />
             <span>Log out</span>
           </DropdownMenuItem>

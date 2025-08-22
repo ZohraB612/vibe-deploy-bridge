@@ -1,9 +1,10 @@
 import { Button } from "@/components/ui/button";
-import { Cloud, Home, Settings, User, Menu, X } from "lucide-react";
+import { Cloud, Home, Settings, User, Menu, X, Globe } from "lucide-react";
 import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { ThemeToggle } from "@/components/theme-toggle";
+
 import { UserMenu } from "@/components/user-menu";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -12,9 +13,11 @@ interface LayoutProps {
 export function Layout({ children }: LayoutProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const location = useLocation();
+  const { isAuthenticated } = useAuth();
 
   const navigation = [
     { name: "Dashboard", href: "/dashboard", icon: Home },
+    { name: "Domains", href: "/domains", icon: Globe },
     { name: "Settings", href: "/settings", icon: Settings },
   ];
 
@@ -36,7 +39,7 @@ export function Layout({ children }: LayoutProps) {
 
             {/* Desktop Navigation */}
             <nav className="hidden md:flex items-center space-x-6">
-              {navigation.map((item) => (
+              {isAuthenticated && navigation.map((item) => (
                 <Link
                   key={item.name}
                   to={item.href}
@@ -50,7 +53,6 @@ export function Layout({ children }: LayoutProps) {
                   <span>{item.name}</span>
                 </Link>
               ))}
-               <ThemeToggle />
                <UserMenu />
             </nav>
 
@@ -71,7 +73,7 @@ export function Layout({ children }: LayoutProps) {
           {isMenuOpen && (
             <div className="md:hidden py-4 border-t">
               <nav className="flex flex-col space-y-2">
-                {navigation.map((item) => (
+                {isAuthenticated && navigation.map((item) => (
                   <Link
                     key={item.name}
                     to={item.href}
@@ -87,7 +89,6 @@ export function Layout({ children }: LayoutProps) {
                   </Link>
                 ))}
                  <div className="flex items-center gap-3 self-start mt-2">
-                   <ThemeToggle />
                    <UserMenu />
                  </div>
               </nav>
