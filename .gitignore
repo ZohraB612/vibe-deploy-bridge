@@ -17,6 +17,8 @@ secrets.json
 .aws/
 aws-exports.js
 awsconfiguration.json
+aws-credentials.json
+aws-role-credentials.json
 
 
 # Logs
@@ -40,6 +42,10 @@ build/
 .cache/
 .parcel-cache/
 .nx/cache/
+
+# Backend build artifacts
+src/backend/dist/
+src/backend/node_modules/
 
 # Coverage and testing
 coverage/
@@ -110,6 +116,10 @@ dev/
 development/
 debug/
 
+# Supabase local development
+.supabase/
+supabase/
+
 # Documentation build
 docs/build/
 .docusaurus/
@@ -122,3 +132,26 @@ storybook-static/
 *.tar.gz
 .eslintcache
 .stylelintcache
+
+# Terraform files
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
+terraform.tfvars
+terraform.tfvars.json
+
+# Deployment artifacts
+deployhub-*.zip
+deployhub-*.tar.gz
+
+# Local database and session files
+*.session
+*.session.*
+session/
+sessions/
+
+# Log files specific to DeployHub
+deployhub-*.log
+deployment-*.log
+aws-*.log

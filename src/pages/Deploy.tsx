@@ -3,10 +3,12 @@ import { Button } from "@/components/ui/button";
 import { useProjects } from "@/contexts/ProjectContext";
 import { useAWS } from "@/contexts/AWSContext";
 import { useAWSStatus } from "@/hooks/use-aws-status";
+import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Layout } from "@/components/Layout";
 import { Progress } from "@/components/ui/progress";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -20,7 +22,8 @@ import {
   AlertCircle,
   ArrowLeft,
   ArrowRight,
-  Cloud
+  Cloud,
+  RefreshCw
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Link, useNavigate } from "react-router-dom";
@@ -47,24 +50,14 @@ export default function Deploy() {
   const [dragActive, setDragActive] = useState(false);
   const [errors, setErrors] = useState<FormErrors>({});
   const [isValidating, setIsValidating] = useState(false);
+  const [deploymentMethod, setDeploymentMethod] = useState<'terraform' | 's3' | 'cloudformation'>('terraform');
   const { toast } = useToast();
   const { addProject } = useProjects();
-  const { connection, deployToS3, deployWithCloudFormation } = useAWS();
+  const { connection, credentials, deployToS3, deployWithCloudFormation, deployWithTerraform } = useAWS();
   const { hasAWSConnection, isLoading: isAWSLoading } = useAWSStatus();
+  const { user } = useAuth();
   const navigate = useNavigate();
 
-  // Redirect to AWS setup if user doesn't have AWS connection
-  useEffect(() => {
-    if (!isAWSLoading && hasAWSConnection === false) {
-      navigate('/setup/aws', { replace: true });
-    }
-  }, [hasAWSConnection, isAWSLoading, navigate]);
-
-  // Don't render deploy page if still checking AWS status or if redirecting
-  if (isAWSLoading || hasAWSConnection === false) {
-    return null;
-  }
-  
   const [projectConfig, setProjectConfig] = useState<ProjectConfig>({
     name: '',
     description: '',
@@ -72,6 +65,47 @@ export default function Deploy() {
     files: []
   });
   const [deployedUrl, setDeployedUrl] = useState<string>('');
+
+  // Show AWS setup prompt if user doesn't have AWS connection
+  if (!isAWSLoading && hasAWSConnection === false) {
+    return (
+      <Layout>
+        <div className="container mx-auto px-4 py-8">
+          <Card className="max-w-md mx-auto">
+            <CardHeader className="text-center">
+              <Globe className="h-8 w-8 text-primary mx-auto mb-2" />
+              <CardTitle>Connect Your AWS Account</CardTitle>
+              <CardDescription>
+                To deploy projects, you need to connect your AWS account first.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="text-center space-y-4">
+              <p className="text-sm text-muted-foreground">
+                We'll guide you through the AWS setup process step by step.
+              </p>
+              <div className="flex gap-2 justify-center">
+                <Link to="/setup/aws">
+                  <Button>
+                    <Globe className="h-4 w-4 mr-2" />
+                    Connect AWS Account
+                  </Button>
+                </Link>
+                <Button variant="outline" onClick={() => window.location.reload()}>
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  Refresh Status
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </Layout>
+    );
+  }
+
+  // Don't render deploy page if still checking AWS status
+  if (isAWSLoading) {
+    return null;
+  }
 
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault();
@@ -198,8 +232,19 @@ export default function Deploy() {
   const startRealDeployment = async () => {
     setIsValidating(true);
     
-    // Check AWS connection
-    if (!connection) {
+    // Validate AWS connection and credentials
+    if (!connection || !credentials) {
+      setIsValidating(false);
+      toast({
+        title: "AWS Connection Issue",
+        description: "AWS connection or credentials are missing. Please reconnect your AWS account.",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    // Check AWS connection using the same logic as the page guard
+    if (isAWSLoading || !hasAWSConnection) {
       setIsValidating(false);
       toast({
         title: "AWS Connection Required",
@@ -228,12 +273,33 @@ export default function Deploy() {
       // Update progress
       setDeploymentProgress(20);
       
-      // Start real AWS deployment
-      const deploymentResult = await deployToS3(
-        projectConfig.name,
-        projectConfig.files,
-        projectConfig.domain
-      );
+      // Start real AWS deployment based on selected method
+      let deploymentResult;
+      
+      switch (deploymentMethod) {
+        case 'terraform':
+          deploymentResult = await deployWithTerraform(
+            projectConfig.name,
+            projectConfig.files,
+            projectConfig.domain
+          );
+          break;
+        case 'cloudformation':
+          deploymentResult = await deployWithCloudFormation(
+            projectConfig.name,
+            projectConfig.files,
+            projectConfig.domain
+          );
+          break;
+        case 's3':
+        default:
+          deploymentResult = await deployToS3(
+            projectConfig.name,
+            projectConfig.files,
+            projectConfig.domain
+          );
+          break;
+      }
       
       setDeploymentProgress(80);
       
@@ -253,7 +319,7 @@ export default function Deploy() {
         buildTime: "Real AWS deployment",
         size: `${Math.round(projectConfig.files.reduce((total, file) => total + file.size, 0) / (1024 * 1024) * 10) / 10} MB`,
         awsBucket: deploymentResult.bucketName,
-        awsRegion: connection.region
+        awsRegion: connection?.region || 'us-east-1'
       });
 
       if (!newProject) {
@@ -264,9 +330,15 @@ export default function Deploy() {
       setIsDeploying(false);
       setCurrentStep('success');
       
+      const methodNames = {
+        terraform: 'Terraform',
+        cloudformation: 'CloudFormation',
+        s3: 'S3'
+      };
+      
       toast({
         title: "Deployment successful!",
-        description: "Your application is now live on AWS with CloudFront!",
+        description: `Your application is now live on AWS using ${methodNames[deploymentMethod]}!`,
       });
     } catch (error: any) {
       setIsDeploying(false);
@@ -429,6 +501,41 @@ export default function Deploy() {
           </p>
         </div>
 
+        <div className="space-y-2">
+          <Label htmlFor="deployment-method">Deployment Method</Label>
+          <Select 
+            value={deploymentMethod} 
+            onValueChange={(value: 'terraform' | 's3' | 'cloudformation') => setDeploymentMethod(value)}
+          >
+            <SelectTrigger id="deployment-method">
+              <SelectValue placeholder="Select deployment method" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="terraform">
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-4 bg-orange-500 rounded"></div>
+                  <span>Terraform (Recommended)</span>
+                </div>
+              </SelectItem>
+              <SelectItem value="s3">
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-4 bg-blue-500 rounded"></div>
+                  <span>S3 Only</span>
+                </div>
+              </SelectItem>
+              <SelectItem value="cloudformation">
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-4 bg-green-500 rounded"></div>
+                  <span>CloudFormation</span>
+                </div>
+              </SelectItem>
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground">
+            Terraform provides the most secure and scalable infrastructure with CloudFront CDN
+          </p>
+        </div>
+
         <Alert>
           <AlertCircle className="h-4 w-4" />
           <AlertDescription>
@@ -437,7 +544,7 @@ export default function Deploy() {
           </AlertDescription>
         </Alert>
 
-        {!connection.isConnected && (
+        {connection && !connection.is_active && (
           <Alert variant="destructive">
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>
@@ -455,8 +562,8 @@ export default function Deploy() {
             Back
           </Button>
           <Button 
-                            onClick={startRealDeployment}
-                          disabled={!projectConfig.name.trim() || isValidating || !connection}
+            onClick={startRealDeployment}
+            disabled={!projectConfig.name.trim() || isValidating || !connection || !connection.is_active}
             className="bg-gradient-primary hover:shadow-glow min-w-32"
           >
             {isValidating ? (

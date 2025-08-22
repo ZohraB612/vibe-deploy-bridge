@@ -2,6 +2,15 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { 
+  DropdownMenu, 
+  DropdownMenuContent, 
+  DropdownMenuItem, 
+  DropdownMenuLabel, 
+  DropdownMenuSeparator, 
+  DropdownMenuTrigger 
+} from "@/components/ui/dropdown-menu";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { 
   ArrowRight, 
   Cloud, 
   Zap, 
@@ -10,11 +19,15 @@ import {
   Code,
   Rocket,
   Users,
-  Star
+  Star,
+  User,
+  LogOut,
+  Settings
 } from "lucide-react";
 import { Link } from "react-router-dom";
-import { useAuthRedirect } from "@/hooks/use-auth-redirect";
+
 import { useAuth } from "@/contexts/AuthContext";
+import { useAWSStatus } from "@/hooks/use-aws-status";
 import { AuthDialog } from "@/components/auth/AuthDialog";
 import { useState } from "react";
 import heroImage from "@/assets/hero-deployment.jpg";
@@ -77,9 +90,8 @@ const testimonials = [
 ];
 
 export default function Index() {
-  // Redirect authenticated users to dashboard
-  useAuthRedirect();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user, signOut } = useAuth();
+  const { hasAWSConnection, isLoading: isAWSLoading } = useAWSStatus();
   const [showAuth, setShowAuth] = useState(false);
   
   return (
@@ -97,17 +109,64 @@ export default function Index() {
             
             <div className="flex items-center space-x-4">
               {isAuthenticated ? (
-                <Link to="/dashboard">
-                  <Button variant="ghost">Dashboard</Button>
-                </Link>
+                <div className="flex items-center space-x-4">
+                  {/* Show Dashboard only if user has AWS connection */}
+                  {!isAWSLoading && hasAWSConnection && (
+                    <Link to="/dashboard">
+                      <Button variant="ghost">Dashboard</Button>
+                    </Link>
+                  )}
+                  
+                  {/* Profile Dropdown */}
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" className="relative h-8 w-8 rounded-full">
+                        <Avatar className="h-8 w-8">
+                          <AvatarImage src={user?.avatar_url} alt={user?.name || user?.email} />
+                          <AvatarFallback>
+                            {user?.name ? user.name.charAt(0).toUpperCase() : user?.email?.charAt(0).toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent className="w-56" align="end" forceMount>
+                      <DropdownMenuLabel className="font-normal">
+                        <div className="flex flex-col space-y-1">
+                          <p className="text-sm font-medium leading-none">{user?.name || 'User'}</p>
+                          <p className="text-xs leading-none text-muted-foreground">{user?.email}</p>
+                        </div>
+                      </DropdownMenuLabel>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem asChild>
+                        <Link to="/settings">
+                          <Settings className="mr-2 h-4 w-4" />
+                          <span>Settings</span>
+                        </Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onClick={signOut}>
+                        <LogOut className="mr-2 h-4 w-4" />
+                        <span>Log out</span>
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
               ) : (
                 <Button variant="ghost" onClick={() => setShowAuth(true)}>
-                  Sign In
+                  Login
                 </Button>
               )}
-              <Link to="/setup/aws">
-                <Button variant="hero">Get Started</Button>
-              </Link>
+              
+              {/* Get Started button - show AWS setup for users without connection */}
+              {isAuthenticated && !isAWSLoading && !hasAWSConnection ? (
+                <Link to="/setup/aws">
+                  <Button variant="hero">Connect AWS</Button>
+                </Link>
+              ) : (
+                <Link to="/setup/aws">
+                  <Button variant="hero">Get Started</Button>
+                </Link>
+              )}
             </div>
           </div>
         </div>
@@ -134,12 +193,28 @@ export default function Index() {
               </div>
 
               <div className="flex flex-col sm:flex-row gap-4">
-                <Link to="/setup/aws">
-                  <Button size="lg" variant="hero" className="w-full sm:w-auto">
-                    Start Deploying Now
-                    <ArrowRight className="ml-2 h-5 w-5" />
-                  </Button>
-                </Link>
+                {isAuthenticated && !isAWSLoading && hasAWSConnection ? (
+                  <Link to="/deploy">
+                    <Button size="lg" variant="hero" className="w-full sm:w-auto">
+                      Deploy Your Project
+                      <ArrowRight className="ml-2 h-5 w-5" />
+                    </Button>
+                  </Link>
+                ) : isAuthenticated && !isAWSLoading && !hasAWSConnection ? (
+                  <Link to="/setup/aws">
+                    <Button size="lg" variant="hero" className="w-full sm:w-auto">
+                      Connect AWS Account
+                      <ArrowRight className="ml-2 h-5 w-5" />
+                    </Button>
+                  </Link>
+                ) : (
+                  <Link to="/setup/aws">
+                    <Button size="lg" variant="hero" className="w-full sm:w-auto">
+                      Start Deploying Now
+                      <ArrowRight className="ml-2 h-5 w-5" />
+                    </Button>
+                  </Link>
+                )}
                 <Button size="lg" variant="outline" className="w-full sm:w-auto">
                   <Code className="mr-2 h-5 w-5" />
                   See How It Works

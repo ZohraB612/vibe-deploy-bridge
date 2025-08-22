@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DeployHub Demo - Cloud Deployment Made Simple</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>☁️</text></svg>">
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="nav-logo">
+                <span class="logo-icon">☁️</span>
+                <span class="logo-text">DeployHub Demo</span>
+            </div>
+            <div class="nav-links">
+                <a href="#features">Features</a>
+                <a href="#demo">Demo</a>
+                <a href="#about">About</a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="hero-container">
+            <div class="hero-content">
+                <h1 class="hero-title">
+                    DeployHub Demo
+                    <span class="gradient-text">Successfully Deployed!</span>
+                </h1>
+                <p class="hero-subtitle">
+                    This website was deployed using DeployHub's Terraform infrastructure. 
+                    It demonstrates the power of automated cloud deployment.
+                </p>
+                <div class="hero-buttons">
+                    <button class="btn btn-primary" onclick="showDeploymentInfo()">
+                        🚀 View Deployment Info
+                    </button>
+                    <button class="btn btn-secondary" onclick="animateElements()">
+                        ✨ Animate Elements
+                    </button>
+                </div>
+            </div>
+            <div class="hero-visual">
+                <div class="floating-card">
+                    <div class="card-icon">☁️</div>
+                    <div class="card-title">Cloud Deployed</div>
+                    <div class="card-status">✅ Active</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Features Section -->
+    <section id="features" class="features">
+        <div class="container">
+            <h2 class="section-title">What This Demo Shows</h2>
+            <div class="features-grid">
+                <div class="feature-card">
+                    <div class="feature-icon">🚀</div>
+                    <h3>Instant Deployment</h3>
+                    <p>Deployed from code to live website in minutes using Terraform</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">☁️</div>
+                    <h3>AWS Infrastructure</h3>
+                    <p>Automatically created S3 bucket, CloudFront CDN, and SSL certificate</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🔒</div>
+                    <h3>Secure & Scalable</h3>
+                    <p>Production-ready infrastructure with global CDN and HTTPS</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">⚡</div>
+                    <h3>High Performance</h3>
+                    <p>Optimized for speed with CloudFront edge locations worldwide</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Demo Section -->
+    <section id="demo" class="demo">
+        <div class="container">
+            <h2 class="section-title">Interactive Demo</h2>
+            <div class="demo-container">
+                <div class="demo-card">
+                    <h3>Deployment Status</h3>
+                    <div class="status-grid">
+                        <div class="status-item">
+                            <span class="status-label">S3 Bucket:</span>
+                            <span class="status-value" id="s3-status">✅ Created</span>
+                        </div>
+                        <div class="status-item">
+                            <span class="status-label">CloudFront:</span>
+                            <span class="status-value" id="cf-status">✅ Active</span>
+                        </div>
+                        <div class="status-item">
+                            <span class="status-label">SSL Certificate:</span>
+                            <span class="status-value" id="ssl-status">✅ Valid</span>
+                        </div>
+                        <div class="status-item">
+                            <span class="status-label">DNS Records:</span>
+                            <span class="status-value" id="dns-status">✅ Configured</span>
+                        </div>
+                    </div>
+                    <button class="btn btn-outline" onclick="simulateDeployment()">
+                        🔄 Simulate New Deployment
+                    </button>
+                </div>
+                
+                <div class="demo-card">
+                    <h3>Performance Metrics</h3>
+                    <div class="metrics">
+                        <div class="metric">
+                            <div class="metric-value" id="load-time">0.8s</div>
+                            <div class="metric-label">Load Time</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-value" id="uptime">99.9%</div>
+                            <div class="metric-label">Uptime</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-value" id="locations">200+</div>
+                            <div class="metric-label">Edge Locations</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- About Section -->
+    <section id="about" class="about">
+        <div class="container">
+            <h2 class="section-title">About This Demo</h2>
+            <div class="about-content">
+                <p>
+                    This is a demonstration website created to showcase DeployHub's capabilities. 
+                    It was built with vanilla HTML, CSS, and JavaScript, then deployed to AWS using 
+                    DeployHub's Terraform infrastructure automation.
+                </p>
+                <div class="tech-stack">
+                    <h3>Tech Stack Used:</h3>
+                    <ul>
+                        <li><strong>Frontend:</strong> HTML5, CSS3, Vanilla JavaScript</li>
+                        <li><strong>Infrastructure:</strong> AWS S3, CloudFront, Route 53, ACM</li>
+                        <li><strong>Deployment:</strong> DeployHub with Terraform</li>
+                        <li><strong>Features:</strong> Responsive design, animations, interactive elements</li>
+                    </ul>
+                </div>
+                <div class="deployment-info">
+                    <h3>Deployment Details:</h3>
+                    <p><strong>Deployment Method:</strong> Terraform (Infrastructure as Code)</p>
+                    <p><strong>Infrastructure:</strong> S3 Static Website + CloudFront CDN + SSL</p>
+                    <p><strong>Benefits:</strong> Global performance, automatic scaling, cost-effective</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-section">
+                    <h4>DeployHub Demo</h4>
+                    <p>Successfully deployed to AWS using DeployHub's automated infrastructure.</p>
+                </div>
+                <div class="footer-section">
+                    <h4>Quick Links</h4>
+                    <a href="#features">Features</a>
+                    <a href="#demo">Demo</a>
+                    <a href="#about">About</a>
+                </div>
+                <div class="footer-section">
+                    <h4>Deployment Info</h4>
+                    <p>✅ S3 Bucket Created</p>
+                    <p>✅ CloudFront Active</p>
+                    <p>✅ SSL Certificate Valid</p>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>&copy; 2025 DeployHub Demo. Deployed with ❤️ using DeployHub.</p>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Deployment Info Modal -->
+    <div id="deployment-modal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal()">&times;</span>
+            <h2>🚀 Deployment Information</h2>
+            <div class="deployment-details">
+                <div class="detail-item">
+                    <strong>Deployment Method:</strong> Terraform
+                </div>
+                <div class="detail-item">
+                    <strong>Infrastructure:</strong> AWS S3 + CloudFront + Route 53 + ACM
+                </div>
+                <div class="detail-item">
+                    <strong>Deployment Time:</strong> ~5 minutes
+                </div>
+                <div class="detail-item">
+                    <strong>Cost:</strong> ~$0.50/month
+                </div>
+                <div class="detail-item">
+                    <strong>Performance:</strong> Global CDN with 200+ edge locations
+                </div>
+                <div class="detail-item">
+                    <strong>Security:</strong> HTTPS with SSL certificate
+                </div>
+            </div>
+            <p class="deployment-note">
+                This demo shows how DeployHub can automatically create production-ready 
+                infrastructure for your web applications using Terraform.
+            </p>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

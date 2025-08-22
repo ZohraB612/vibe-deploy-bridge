@@ -1,0 +1,20 @@
+# DeployHub Terraform Configuration Example
+# Copy this file to terraform.tfvars and modify the values
+
+# Project Configuration
+project_name = "my-awesome-app"
+environment  = "dev"  # dev, staging, prod
+project_owner = "deployhub"
+
+# AWS Configuration
+aws_region = "us-east-1"
+
+# Domain Configuration (optional)
+domain_name = ""  # Leave empty for no custom domain
+enable_ssl = true
+
+# CDN Configuration
+enable_cloudfront = true
+
+# Advanced Configuration (usually don't need to change)
+# These are set in main.tf with sensible defaults

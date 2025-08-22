@@ -60,6 +60,7 @@ export interface Database {
           last_deployed_at: string | null
           aws_bucket: string | null
           aws_region: string | null
+          aws_distribution_id: string | null
           metadata: Json | null
         }
         Insert: {
@@ -79,6 +80,7 @@ export interface Database {
           last_deployed_at?: string | null
           aws_bucket?: string | null
           aws_region?: string | null
+          aws_distribution_id?: string | null
           metadata?: Json | null
         }
         Update: {
@@ -98,6 +100,7 @@ export interface Database {
           last_deployed_at?: string | null
           aws_bucket?: string | null
           aws_region?: string | null
+          aws_distribution_id?: string | null
           metadata?: Json | null
         }
       }

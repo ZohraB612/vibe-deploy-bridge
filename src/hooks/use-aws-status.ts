@@ -1,12 +1,14 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
+import { useAWS } from '@/contexts/AWSContext';
 
 export function useAWSStatus() {
   const [hasAWSConnection, setHasAWSConnection] = useState<boolean | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { user } = useAuth();
+  const { connection } = useAWS();
 
   useEffect(() => {
     async function checkAWSConnection() {
@@ -16,16 +18,23 @@ export function useAWSStatus() {
         return;
       }
 
+      // First check if AWS context already has a connection
+      if (connection && connection.is_active) {
+        setHasAWSConnection(true);
+        setIsLoading(false);
+        return;
+      }
+
       try {
         setIsLoading(true);
         setError(null);
 
-        // Check if user has any AWS connections
+        // Check if user has any AWS connections in database
         const { data: connections, error } = await supabase
           .from('aws_connections')
-          .select('id, status')
+          .select('id, is_active')
           .eq('user_id', user.id)
-          .eq('status', 'connected')
+          .eq('is_active', true)
           .limit(1);
 
         if (error) {
@@ -34,7 +43,13 @@ export function useAWSStatus() {
           setHasAWSConnection(false);
         } else {
           // User has AWS connection if there's at least one connected connection
-          setHasAWSConnection(connections && connections.length > 0);
+          const hasConnection = connections && connections.length > 0;
+          console.log('🔍 useAWSStatus Database Check:', {
+            connections,
+            hasConnection,
+            userId: user.id
+          });
+          setHasAWSConnection(hasConnection);
         }
       } catch (err) {
         console.error('Error checking AWS connection status:', err);
@@ -46,7 +61,7 @@ export function useAWSStatus() {
     }
 
     checkAWSConnection();
-  }, [user]);
+  }, [user, connection]);
 
   return {
     hasAWSConnection,

@@ -42,15 +42,44 @@ export default function Dashboard() {
   const { projects, isLoading, error, refreshProjects } = useProjects();
   const { hasAWSConnection, isLoading: isAWSLoading } = useAWSStatus();
 
-  // Redirect to AWS setup if user doesn't have AWS connection
-  useEffect(() => {
-    if (!isAWSLoading && hasAWSConnection === false) {
-      navigate('/setup/aws', { replace: true });
-    }
-  }, [hasAWSConnection, isAWSLoading, navigate]);
+  // Show AWS setup prompt if user doesn't have AWS connection
+  if (!isAWSLoading && hasAWSConnection === false) {
+    return (
+      <Layout>
+        <div className="container mx-auto px-4 py-8">
+          <Card className="max-w-md mx-auto">
+            <CardHeader className="text-center">
+              <Globe className="h-8 w-8 text-primary mx-auto mb-2" />
+              <CardTitle>Connect Your AWS Account</CardTitle>
+              <CardDescription>
+                To deploy projects and manage your infrastructure, you need to connect your AWS account first.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="text-center space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Don't worry, it only takes a few minutes and we'll guide you through the process step by step.
+              </p>
+              <div className="flex gap-2 justify-center">
+                <Link to="/setup/aws">
+                  <Button>
+                    <Globe className="h-4 w-4 mr-2" />
+                    Connect AWS Account
+                  </Button>
+                </Link>
+                <Button variant="outline" onClick={() => window.location.reload()}>
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  Refresh Status
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </Layout>
+    );
+  }
 
-  // Don't render dashboard if still checking AWS status or if redirecting
-  if (isAWSLoading || hasAWSConnection === false) {
+  // Don't render dashboard if still checking AWS status
+  if (isAWSLoading) {
     return null;
   }
   if (error) {

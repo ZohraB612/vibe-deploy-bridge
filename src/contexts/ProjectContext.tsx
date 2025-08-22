@@ -18,6 +18,7 @@ export interface Project {
   description?: string | null;
   awsBucket?: string | null;
   awsRegion?: string | null;
+  awsDistributionId?: string | null;
 }
 
 interface ProjectContextType {
@@ -66,6 +67,7 @@ export function ProjectProvider({ children }: ProjectProviderProps) {
     description: dbProject.description,
     awsBucket: dbProject.aws_bucket,
     awsRegion: dbProject.aws_region,
+    awsDistributionId: dbProject.aws_distribution_id,
   });
 
   // Load projects when user is authenticated
@@ -195,6 +197,7 @@ export function ProjectProvider({ children }: ProjectProviderProps) {
       if (updates.description !== undefined) projectUpdate.description = updates.description;
       if (updates.awsBucket !== undefined) projectUpdate.aws_bucket = updates.awsBucket;
       if (updates.awsRegion !== undefined) projectUpdate.aws_region = updates.awsRegion;
+      if (updates.awsDistributionId !== undefined) projectUpdate.aws_distribution_id = updates.awsDistributionId;
       if (updates.deployments !== undefined) projectUpdate.deployment_count = updates.deployments;
       if (updates.lastDeployed !== undefined) projectUpdate.last_deployed_at = updates.lastDeployed?.toISOString();
 
@@ -223,7 +226,7 @@ export function ProjectProvider({ children }: ProjectProviderProps) {
     }
   }, [isAuthenticated, user]);
 
-  const deleteProject = useCallback(async (id: string): Promise<boolean> => {
+  const deleteProject = useCallback(async (id: string, cleanupAWS: boolean = false): Promise<boolean> => {
     if (!isAuthenticated || !user) {
       setError("You must be authenticated to delete projects");
       return false;
@@ -232,6 +235,48 @@ export function ProjectProvider({ children }: ProjectProviderProps) {
     try {
       setError(null);
 
+      // Get project details before deletion for AWS cleanup
+      const projectToDelete = projects.find(p => p.id === id);
+      if (!projectToDelete) {
+        setError("Project not found");
+        return false;
+      }
+
+      // Clean up AWS resources if requested and project has AWS resources
+      if (cleanupAWS && (projectToDelete.awsBucket || projectToDelete.awsDistributionId)) {
+        try {
+          console.log(`Cleaning up AWS resources for project: ${projectToDelete.name}`);
+          
+          // Call backend cleanup endpoint
+          const response = await fetch('http://localhost:3001/cleanup-project', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              projectName: projectToDelete.name,
+              bucketName: projectToDelete.awsBucket,
+              distributionId: projectToDelete.awsDistributionId,
+              credentials: {
+                // Note: This would need to be passed from the component or context
+                // For now, we'll rely on the backend to use the stored credentials
+              },
+              region: projectToDelete.awsRegion || 'us-east-1'
+            }),
+          });
+
+          if (response.ok) {
+            const result = await response.json();
+            console.log('AWS cleanup result:', result);
+          } else {
+            console.warn('AWS cleanup failed, but continuing with project deletion');
+          }
+        } catch (awsError) {
+          console.warn('AWS cleanup failed, but continuing with project deletion:', awsError);
+        }
+      }
+
+      // Delete project from database
       const { error: deleteError } = await supabase
         .from('projects')
         .delete()
@@ -250,7 +295,7 @@ export function ProjectProvider({ children }: ProjectProviderProps) {
       console.error("Failed to delete project:", err);
       return false;
     }
-  }, [isAuthenticated, user]);
+  }, [isAuthenticated, user, projects]);
 
   const getProject = useCallback((id: string) => {
     return projects.find(project => project.id === id);

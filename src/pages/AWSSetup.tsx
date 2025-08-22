@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useAWS } from "@/contexts/AWSContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -46,14 +47,106 @@ const awsPolicy = {
   "Version": "2012-10-17",
   "Statement": [
     {
+      "Sid": "DeployHubS3Access",
       "Effect": "Allow",
       "Action": [
-        "s3:*",
-        "lambda:*", 
-        "cloudformation:*",
-        "iam:PassRole"
+        "s3:CreateBucket",
+        "s3:DeleteBucket",
+        "s3:PutObject",
+        "s3:GetObject",
+        "s3:DeleteObject",
+        "s3:ListBucket",
+        "s3:PutBucketWebsite",
+        "s3:PutBucketPolicy",
+        "s3:GetBucketPolicy",
+        "s3:DeleteBucketPolicy"
+      ],
+      "Resource": [
+        "arn:aws:s3:::deployhub-*",
+        "arn:aws:s3:::deployhub-*/*"
+      ]
+    },
+    {
+      "Sid": "DeployHubCloudFrontAccess",
+      "Effect": "Allow",
+      "Action": [
+        "cloudfront:CreateDistribution",
+        "cloudfront:UpdateDistribution",
+        "cloudfront:DeleteDistribution",
+        "cloudfront:GetDistribution",
+        "cloudfront:CreateInvalidation",
+        "cloudfront:GetInvalidation"
       ],
       "Resource": "*"
+    },
+    {
+      "Sid": "DeployHubCloudFormationAccess",
+      "Effect": "Allow",
+      "Action": [
+        "cloudformation:CreateStack",
+        "cloudformation:UpdateStack",
+        "cloudformation:DeleteStack",
+        "cloudformation:DescribeStacks",
+        "cloudformation:DescribeStackEvents",
+        "cloudformation:ValidateTemplate"
+      ],
+      "Resource": "arn:aws:cloudformation:*:*:stack/deployhub-*"
+    },
+    {
+      "Sid": "DeployHubRoute53Access",
+      "Effect": "Allow",
+      "Action": [
+        "route53:GetHostedZone",
+        "route53:ListHostedZones",
+        "route53:ChangeResourceRecordSets",
+        "route53:GetChange"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "DeployHubACMAccess",
+      "Effect": "Allow",
+      "Action": [
+        "acm:RequestCertificate",
+        "acm:DescribeCertificate",
+        "acm:DeleteCertificate",
+        "acm:ListCertificates"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "DeployHubIAMPassRole",
+      "Effect": "Allow",
+      "Action": "iam:PassRole",
+      "Resource": "arn:aws:iam::*:role/deployhub-*"
+      },
+    {
+      "Sid": "DeployHubSTSAssumeRole",
+      "Effect": "Allow",
+      "Action": "sts:AssumeRole",
+      "Resource": "arn:aws:iam::*:role/deployhub-*"
+    },
+    {
+      "Sid": "DeployHubCloudWatchAccess",
+      "Effect": "Allow",
+      "Action": [
+        "cloudwatch:PutMetricData",
+        "cloudwatch:GetMetricData",
+        "cloudwatch:ListMetrics"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "DeployHubLogsAccess",
+      "Effect": "Allow",
+      "Action": [
+        "logs:CreateLogGroup",
+        "logs:CreateLogStream",
+        "logs:PutLogEvents",
+        "logs:DescribeLogGroups",
+        "logs:DescribeLogStreams"
+      ],
+      "Resource": "arn:aws:logs:*:*:log-group:/aws/deployhub/*"
     }
   ]
 };
@@ -62,13 +155,8 @@ export default function AWSSetup() {
   const [currentStep, setCurrentStep] = useState(1);
   const [roleArn, setRoleArn] = useState("");
   
-  // Generate a unique external ID for this user/session
-  const [externalId] = useState(() => {
-    // Generate a unique external ID based on timestamp and random string
-    const timestamp = Date.now().toString(36);
-    const random = Math.random().toString(36).substring(2, 8);
-    return `deployhub-${timestamp}-${random}`;
-  });
+  // Use the fixed external ID that the IAM role trusts
+  const [externalId] = useState("deployhub-trusted-service");
 
   // Generate the trust policy with the current external ID
   const trustPolicy = {
@@ -77,7 +165,7 @@ export default function AWSSetup() {
       {
         "Effect": "Allow",
         "Principal": {
-          "AWS": "arn:aws:iam::ACCOUNT_ID:root"
+          "AWS": "arn:aws:iam::599248138183:role/DeployHubLambdaRole"
         },
         "Action": "sts:AssumeRole",
         "Condition": {
@@ -90,6 +178,7 @@ export default function AWSSetup() {
   };
   const { toast } = useToast();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const { connectWithRole, isConnecting, error, connection, validateRole } = useAWS();
 
   const copyToClipboard = (text: string | object) => {
@@ -122,19 +211,56 @@ export default function AWSSetup() {
       return;
     }
 
-    // Attempt to connect
-    const success = await connectWithRole(roleArn, externalId);
-    
-    if (success) {
+    // Call the new secure backend to verify and store the connection
+    try {
+      // Note: isConnecting state is managed by the AWS context
+      
+      const apiUrl = import.meta.env.VITE_DEPLOYHUB_API_URL || 'https://your-api-gateway-url.execute-api.us-east-1.amazonaws.com/prod';
+      
+      const response = await fetch(`${apiUrl}/connect-aws-account`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          roleArn,
+          externalId,
+          userId: user?.id,
+          accountId: validation.accountId,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || `HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      if (result.success) {
+        // Now connect using the traditional method to store locally
+        const success = await connectWithRole(roleArn, externalId);
+        
+        if (success) {
       toast({
         title: "AWS Account Connected!",
-        description: `Successfully connected to account ${validation.accountId}`,
-      });
-      navigate("/dashboard");
-    } else {
+            description: `Successfully verified and connected to account ${validation.accountId}`,
+          });
+          navigate("/dashboard");
+        } else {
+          toast({
+            title: "Local Storage Failed",
+            description: "Verification succeeded but local connection failed. Please try again.",
+            variant: "destructive"
+          });
+        }
+      } else {
+        throw new Error("Verification failed");
+      }
+      
+    } catch (error: any) {
       toast({
         title: "Connection Failed",
-        description: error || "Failed to connect to AWS. Please check your role configuration.",
+        description: error.message || "Failed to verify AWS role connection. Please check your role configuration.",
         variant: "destructive"
       });
     }
@@ -278,6 +404,19 @@ export default function AWSSetup() {
                       </Button>
                     </div>
 
+                    {/* Security Information */}
+                    <div className="p-3 bg-amber-50 border border-amber-200 rounded">
+                      <h5 className="font-medium text-amber-800 mb-2">🔒 Security Features of This Policy:</h5>
+                      <ul className="text-xs text-amber-700 space-y-1 ml-4">
+                        <li>• <strong>Project-scoped:</strong> S3 buckets are limited to <code>deployhub-*</code> prefix</li>
+                        <li>• <strong>Resource-level permissions:</strong> Only specific actions allowed, not wildcard access</li>
+                        <li>• <strong>Stack isolation:</strong> CloudFormation stacks limited to <code>deployhub-*</code> prefix</li>
+                        <li>• <strong>Log isolation:</strong> CloudWatch logs limited to <code>/aws/deployhub/*</code> path</li>
+                        <li>• <strong>Role scoping:</strong> IAM roles limited to <code>deployhub-*</code> prefix</li>
+                        <li>• <strong>No admin access:</strong> Cannot create/delete users, modify billing, or access other AWS services</li>
+                      </ul>
+                    </div>
+
                     <div className="p-3 bg-white rounded border border-green-200">
                       <p className="font-medium text-green-800 mb-2">✅ Now create the policy in AWS:</p>
                       <ol className="text-sm space-y-1 ml-4">
@@ -307,16 +446,16 @@ export default function AWSSetup() {
                     </p>
                     
                     <div className="flex items-center justify-between p-4 bg-white rounded border">
-                      <div>
+                    <div>
                         <h5 className="font-medium">Open AWS IAM Roles</h5>
                         <p className="text-sm text-muted-foreground">Navigate to the IAM Roles section</p>
-                      </div>
-                      <Button variant="outline" size="sm" asChild>
-                        <a href="https://console.aws.amazon.com/iam/home#/roles" target="_blank" rel="noopener noreferrer">
-                          <ExternalLink className="h-4 w-4 mr-2" />
+                    </div>
+                    <Button variant="outline" size="sm" asChild>
+                      <a href="https://console.aws.amazon.com/iam/home#/roles" target="_blank" rel="noopener noreferrer">
+                        <ExternalLink className="h-4 w-4 mr-2" />
                           Open IAM Roles
-                        </a>
-                      </Button>
+                      </a>
+                    </Button>
                     </div>
                   </div>
 
@@ -431,15 +570,15 @@ export default function AWSSetup() {
                     <div className="bg-muted p-3 rounded text-xs font-mono mb-3">
                       {JSON.stringify(trustPolicy, null, 2)}
                     </div>
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
                       onClick={() => copyToClipboard(trustPolicy)}
                       className="w-full"
-                    >
-                      <Copy className="h-4 w-4 mr-2" />
+                      >
+                        <Copy className="h-4 w-4 mr-2" />
                       Copy Trust Policy
-                    </Button>
+                      </Button>
                   </div>
 
                   <div className="p-4 border rounded-lg bg-green-50 border-green-200">
@@ -455,7 +594,7 @@ export default function AWSSetup() {
                         <li>2. Complete the role creation process</li>
                         <li>3. Copy the Role ARN from the role details page</li>
                         <li>4. Paste it in Step 4 of DeployHub</li>
-                      </ol>
+                    </ol>
                     </div>
                   </div>
                 </div>

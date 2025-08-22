@@ -5,7 +5,9 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Layout } from "@/components/Layout";
 import { useAWS } from "@/contexts/AWSContext";
+import { useProjects } from "@/contexts/ProjectContext";
 import { Link } from "react-router-dom";
+import { ResourceCleanup } from "@/components/ResourceCleanup";
 import { 
   User, 
   Cloud, 
@@ -14,11 +16,13 @@ import {
   Shield,
   ExternalLink,
   AlertTriangle,
-  CheckCircle
+  CheckCircle,
+  Trash2
 } from "lucide-react";
 
 export default function Settings() {
   const { connection, disconnect } = useAWS();
+  const { projects, deleteProject } = useProjects();
   
   return (
     <Layout>
@@ -80,9 +84,9 @@ export default function Settings() {
                   </div>
                   <div>
                     <p className="font-medium">AWS Account</p>
-                    {connection.isConnected ? (
+                    {connection && connection.is_active ? (
                       <div>
-                        <p className="text-sm text-muted-foreground">Account: {connection.accountId}</p>
+                        <p className="text-sm text-muted-foreground">Account: {connection.account_id}</p>
                         <p className="text-xs text-muted-foreground">Region: {connection.region}</p>
                       </div>
                     ) : (
@@ -91,7 +95,7 @@ export default function Settings() {
                   </div>
                 </div>
                 <div className="flex items-center space-x-2">
-                  {connection.isConnected ? (
+                  {connection && connection.is_active ? (
                     <>
                       <Badge className="bg-success/10 text-success border-success/20">
                         <CheckCircle className="h-3 w-3 mr-1" />
@@ -129,7 +133,7 @@ export default function Settings() {
                 </div>
               </div>
 
-              {connection.isConnected ? (
+              {connection && connection.is_active ? (
                 <Button variant="outline" className="w-full" asChild>
                   <Link to="/setup/aws">
                     Reconfigure AWS Account
@@ -144,6 +148,31 @@ export default function Settings() {
               )}
             </CardContent>
           </Card>
+
+          {/* AWS Resource Cleanup */}
+          {connection && connection.is_active && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center space-x-2">
+                  <Cloud className="h-5 w-5" />
+                  <span>AWS Resource Cleanup</span>
+                </CardTitle>
+                <CardDescription>
+                  Clean up old S3 buckets and CloudFront distributions that are no longer needed
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ResourceCleanup 
+                  credentials={{
+                    accessKeyId: connection.access_key_id,
+                    secretAccessKey: connection.secret_access_key,
+                    sessionToken: connection.session_token
+                  }}
+                  region={connection.region || 'us-east-1'}
+                />
+              </CardContent>
+            </Card>
+          )}
 
           {/* API Keys */}
           <Card>
@@ -206,6 +235,80 @@ export default function Settings() {
                 </div>
                 <Button variant="outline" size="sm">Enable</Button>
               </div>
+            </CardContent>
+          </Card>
+
+          {/* Project Management */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center space-x-2">
+                <Trash2 className="h-5 w-5 text-destructive" />
+                <span>Project Management</span>
+              </CardTitle>
+              <CardDescription>
+                Manage your deployed projects and clean up old deployments
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {projects.length > 0 ? (
+                <div className="space-y-3">
+                  <p className="text-sm text-muted-foreground">
+                    You have {projects.length} project{projects.length !== 1 ? 's' : ''} deployed. 
+                    Deleting a project will remove it from DeployHub and optionally clean up AWS resources.
+                  </p>
+                  {projects.map((project) => (
+                    <div key={project.id} className="flex items-center justify-between p-3 border rounded-lg">
+                      <div>
+                        <p className="font-medium">{project.name}</p>
+                        <p className="text-sm text-muted-foreground">
+                          Domain: {project.domain} • Status: {project.status}
+                        </p>
+                        {(project.awsBucket || project.awsDistributionId) && (
+                          <p className="text-xs text-muted-foreground mt-1">
+                            AWS: {project.awsBucket && `S3: ${project.awsBucket}`}
+                            {project.awsBucket && project.awsDistributionId && ' • '}
+                            {project.awsDistributionId && `CloudFront: ${project.awsDistributionId}`}
+                          </p>
+                        )}
+                      </div>
+                      <Button 
+                        variant="destructive" 
+                        size="sm"
+                        onClick={async () => {
+                          const shouldCleanupAWS = confirm(
+                            `Are you sure you want to delete "${project.name}"?\n\n` +
+                            `This will:\n` +
+                            `• Remove the project from DeployHub\n` +
+                            `• ${project.awsBucket || project.awsDistributionId ? 'Clean up AWS resources (S3 bucket, CloudFront distribution)' : 'No AWS resources to clean up'}\n\n` +
+                            `This action cannot be undone.`
+                          );
+                          
+                          if (shouldCleanupAWS) {
+                            const success = await deleteProject(project.id, true);
+                            if (success) {
+                              alert(`Project "${project.name}" deleted successfully!${project.awsBucket || project.awsDistributionId ? '\n\nAWS resources have been cleaned up.' : ''}`);
+                            } else {
+                              alert(`Failed to delete project "${project.name}". Please try again.`);
+                            }
+                          }
+                        }}
+                      >
+                        <Trash2 className="h-4 w-4 mr-2" />
+                        Delete Project
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-6">
+                  <p className="text-muted-foreground">No projects found.</p>
+                  <Link to="/deploy">
+                    <Button variant="outline" className="mt-2">
+                      Deploy Your First Project
+                    </Button>
+                  </Link>
+                </div>
+              )}
             </CardContent>
           </Card>
 

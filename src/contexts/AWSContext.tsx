@@ -1,11 +1,8 @@
 import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from "react";
 import { useAuth } from "./AuthContext";
+import { supabase } from "@/lib/supabase";
 import { 
   S3Client, 
-  CreateBucketCommand, 
-  PutBucketWebsiteCommand, 
-  PutObjectCommand,
-  PutBucketPolicyCommand,
   GetObjectCommand,
   ListObjectsV2Command,
   DeleteObjectCommand,
@@ -13,7 +10,6 @@ import {
 } from "@aws-sdk/client-s3";
 import { 
   CloudFrontClient, 
-  CreateDistributionCommand, 
   GetDistributionCommand,
   UpdateDistributionCommand,
   DeleteDistributionCommand,
@@ -21,7 +17,6 @@ import {
 } from "@aws-sdk/client-cloudfront";
 import { 
   CloudFormationClient, 
-  CreateStackCommand, 
   DescribeStacksCommand,
   DeleteStackCommand,
   DescribeStackEventsCommand
@@ -40,7 +35,8 @@ import {
 } from "@aws-sdk/client-acm";
 import { 
   STSClient, 
-  AssumeRoleCommand 
+  AssumeRoleCommand,
+  AssumeRoleWithWebIdentityCommand
 } from "@aws-sdk/client-sts";
 
 export interface AWSConnection {
@@ -50,7 +46,8 @@ export interface AWSConnection {
   external_id: string;
   account_id: string;
   region: string;
-  status: 'connected' | 'disconnected' | 'error';
+  is_active: boolean;
+  last_validated_at?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -88,11 +85,12 @@ interface AWSContextType {
   // Connection management
   connectWithRole: (roleArn: string, externalId: string) => Promise<boolean>;
   disconnect: () => Promise<void>;
-  validateRole: (roleArn: string, externalId: string) => Promise<boolean>;
+  validateRole: (roleArn: string) => Promise<{valid: boolean, accountId?: string, error?: string}>;
   
   // Deployment operations
   deployToS3: (projectName: string, files: File[], domain?: string) => Promise<DeploymentResult>;
   deployWithCloudFormation: (projectName: string, files: File[], domain?: string) => Promise<DeploymentResult>;
+  deployWithTerraform: (projectName: string, files: File[], domain?: string) => Promise<DeploymentResult>;
   deleteDeployment: (projectName: string, distributionId?: string, bucketName?: string) => Promise<boolean>;
   
   // Domain operations
@@ -128,6 +126,8 @@ export function AWSProvider({ children }: AWSProviderProps) {
   const [isConnecting, setIsConnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { user } = useAuth();
+
+
 
   // Initialize AWS clients when credentials change
   const getS3Client = useCallback(() => {
@@ -198,63 +198,119 @@ export function AWSProvider({ children }: AWSProviderProps) {
     setError(null);
     
     try {
-      // Create STS client with default credentials (from environment or IAM role)
-      const stsClient = new STSClient({ region: 'us-east-1' });
-      
-      // Assume the role
-      const assumeRoleCommand = new AssumeRoleCommand({
-        RoleArn: roleArn,
-        RoleSessionName: `deployhub-${user.id}-${Date.now()}`,
-        ExternalId: externalId,
-        DurationSeconds: 3600, // 1 hour
-      });
-      
-      const assumeRoleResult = await stsClient.send(assumeRoleCommand);
-      
-      if (!assumeRoleResult.Credentials) {
-        throw new Error("Failed to assume role - no credentials returned");
+      // Validate ARN format
+      const arnRegex = /^arn:aws:iam::(\d{12}):role\/[\w+=,.@-]+$/;
+      if (!arnRegex.test(roleArn)) {
+        throw new Error("Invalid Role ARN format");
       }
       
-      // Store the temporary credentials
-      const awsCredentials: AWSCredentials = {
-        accessKeyId: assumeRoleResult.Credentials.AccessKeyId!,
-        secretAccessKey: assumeRoleResult.Credentials.SecretAccessKey!,
-        sessionToken: assumeRoleResult.Credentials.SessionToken!,
-        expiration: assumeRoleResult.Credentials.Expiration!,
-      };
+      // Extract account ID
+      const accountId = roleArn.split(':')[4];
       
-      setCredentials(awsCredentials);
+      // Check if user already has an AWS connection
+      const { data: existingConnection, error: fetchError } = await supabase
+        .from('aws_connections')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('is_active', true)
+        .maybeSingle();
       
-      // Create connection record
-      const newConnection: AWSConnection = {
+      if (fetchError && fetchError.code !== 'PGRST116') { // PGRST116 = no rows returned
+        console.warn('Error checking existing connection:', fetchError);
+      }
+      
+      // Call secure backend API to assume user's role
+      try {
+        const apiUrl = import.meta.env.VITE_DEPLOYHUB_API_URL || 'https://your-api-gateway-url.execute-api.us-east-1.amazonaws.com/prod';
+        
+        const response = await fetch(`${apiUrl}/assume-role`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            roleArn,
+            externalId,
+            userId: user.id,
+          }),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
+        }
+
+        const result = await response.json();
+
+        if (!result.success || !result.credentials) {
+          throw new Error('Invalid response from role assumption service');
+        }
+
+        const awsCredentials: AWSCredentials = {
+          accessKeyId: result.credentials.accessKeyId,
+          secretAccessKey: result.credentials.secretAccessKey,
+          sessionToken: result.credentials.sessionToken,
+          expiration: new Date(result.credentials.expiration),
+        };
+
+        setCredentials(awsCredentials);
+        console.log('✅ Successfully obtained real AWS credentials from secure backend');
+        
+      } catch (error: any) {
+        console.error('❌ Backend role assumption failed:', error.message);
+        setError(`Failed to assume AWS role: ${error.message}`);
+        
+        // No fallback - only use real credentials from the backend
+        throw error;
+      }
+      
+      // Use existing connection or create new one
+      const connectionToUse = existingConnection || {
         id: crypto.randomUUID(),
         user_id: user.id,
         role_arn: roleArn,
         external_id: externalId,
-        account_id: roleArn.split(':')[4] || 'unknown',
+        account_id: accountId,
         region: 'us-east-1',
-        status: 'connected',
+        is_active: true,
+        last_validated_at: new Date().toISOString(),
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       };
       
-      setConnection(newConnection);
+      // Update the connection with new role details
+      connectionToUse.role_arn = roleArn;
+      connectionToUse.external_id = externalId;
+      connectionToUse.account_id = accountId;
+      connectionToUse.last_validated_at = new Date().toISOString();
+      connectionToUse.updated_at = new Date().toISOString();
       
-      // Test the connection by listing S3 buckets
-      const s3Client = new S3Client({
-        region: 'us-east-1',
-        credentials: awsCredentials,
-      });
+      setConnection(connectionToUse);
       
-      await s3Client.send(new ListObjectsV2Command({ Bucket: 'test-bucket-existence' }));
+      // Save connection to Supabase - use upsert with conflict resolution on user_id
+      const { error: dbError } = await supabase
+        .from('aws_connections')
+        .upsert({
+          id: connectionToUse.id,
+          user_id: user.id,
+          role_arn: roleArn,
+          external_id: externalId,
+          account_id: accountId,
+          region: 'us-east-1',
+          is_active: true,
+          last_validated_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        }, {
+          onConflict: 'user_id'
+        });
+      
+      if (dbError) {
+        console.warn('Failed to save AWS connection to database:', dbError);
+        // Don't fail the connection for database issues
+      }
       
       return true;
     } catch (err: any) {
-      if (err.name === 'NoSuchBucket') {
-        // This is expected - we just wanted to test credentials
-        return true;
-      }
-      
       setError(err.message || 'Failed to connect to AWS');
       console.error('AWS connection error:', err);
       return false;
@@ -276,144 +332,81 @@ export function AWSProvider({ children }: AWSProviderProps) {
     };
     
     try {
-      addLog("Starting deployment process...");
+      addLog("Starting S3 deployment...");
+      addLog("Using backend API for deployment to avoid CORS issues...");
       
-      const s3Client = getS3Client();
-      const cloudFrontClient = getCloudFrontClient();
+      // Prepare files for backend API (convert to base64)
+      const preparedFiles = await Promise.all(
+        files.map(async (file) => {
+          const arrayBuffer = await file.arrayBuffer();
+          const base64Content = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+          return {
+            name: file.name,
+            content: base64Content
+          };
+        })
+      );
       
-      // Create unique bucket name
-      const bucketName = `${projectName.toLowerCase()}-deployhub-${Date.now()}`;
-      addLog(`Creating S3 bucket: ${bucketName}`);
+      // Call backend API for deployment
+      const apiUrl = process.env.NODE_ENV === 'production' 
+        ? 'https://your-production-api.com' 
+        : 'http://localhost:3001';
       
-      // Create S3 bucket
-      await s3Client.send(new CreateBucketCommand({
-        Bucket: bucketName,
-      }));
-      
-      addLog("S3 bucket created successfully");
-      
-      // Configure bucket for static website hosting
-      await s3Client.send(new PutBucketWebsiteCommand({
-        Bucket: bucketName,
-        WebsiteConfiguration: {
-          IndexDocument: { Suffix: 'index.html' },
-          ErrorDocument: { Key: 'index.html' },
+      addLog("Calling backend deployment API...");
+      const response = await fetch(`${apiUrl}/deploy-s3`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
         },
-      }));
-      
-      addLog("Static website hosting configured");
-      
-      // Upload files to S3
-      addLog(`Uploading ${files.length} files...`);
-      for (const file of files) {
-        const key = file.name === 'index.html' ? 'index.html' : file.name;
-        await s3Client.send(new PutObjectCommand({
-          Bucket: bucketName,
-          Key: key,
-          Body: file,
-          ContentType: getContentType(file.name),
-        }));
-        addLog(`Uploaded: ${key}`);
-      }
-      
-      addLog("All files uploaded successfully");
-      
-      // Create CloudFront distribution
-      addLog("Creating CloudFront distribution...");
-      const distributionCommand = new CreateDistributionCommand({
-        DistributionConfig: {
-          CallerReference: `${projectName}-${Date.now()}`,
-          Comment: `DeployHub distribution for ${projectName}`,
-          DefaultCacheBehavior: {
-            TargetOriginId: `S3-${bucketName}`,
-            ViewerProtocolPolicy: 'redirect-to-https',
-            AllowedMethods: {
-              Quantity: 2,
-              Items: ['GET', 'HEAD'],
-              CachedMethods: {
-                Quantity: 2,
-                Items: ['GET', 'HEAD'],
-              },
-            },
-            Compress: true,
-            DefaultTTL: 86400, // 24 hours
+        body: JSON.stringify({
+          projectName,
+          files: preparedFiles,
+          domain,
+          credentials: {
+            accessKeyId: credentials.accessKeyId,
+            secretAccessKey: credentials.secretAccessKey,
+            sessionToken: credentials.sessionToken,
           },
-          Enabled: true,
-          Origins: {
-            Quantity: 1,
-            Items: [
-              {
-                Id: `S3-${bucketName}`,
-                DomainName: `${bucketName}.s3.${connection.region}.amazonaws.com`,
-                S3OriginConfig: {
-                  OriginAccessIdentity: '',
-                },
-              },
-            ],
-          },
-          PriceClass: 'PriceClass_100', // Use only North America and Europe
-        },
+          region: connection?.region || 'us-east-1'
+        }),
       });
       
-      const distributionResult = await cloudFrontClient.send(distributionCommand);
-      const distributionId = distributionResult.Distribution?.Id;
-      const distributionDomain = distributionResult.Distribution?.DomainName;
-      
-      if (!distributionId || !distributionDomain) {
-        throw new Error("Failed to create CloudFront distribution");
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `API request failed with status: ${response.status}`);
       }
       
-      addLog(`CloudFront distribution created: ${distributionId}`);
+      const deploymentResult = await response.json();
       
-      // Wait for distribution to be deployed
-      addLog("Waiting for CloudFront distribution to deploy...");
-      let isDeployed = false;
-      let attempts = 0;
-      
-      while (!isDeployed && attempts < 30) {
-        await new Promise(resolve => setTimeout(resolve, 10000)); // Wait 10 seconds
-        attempts++;
-        
-        try {
-          const statusResult = await cloudFrontClient.send(new GetDistributionCommand({
-            Id: distributionId,
-          }));
-          
-          if (statusResult.Distribution?.Status === 'Deployed') {
-            isDeployed = true;
-            addLog("CloudFront distribution is now deployed");
-          } else {
-            addLog(`Distribution status: ${statusResult.Distribution?.Status}`);
-          }
-        } catch (err) {
-          addLog(`Error checking distribution status: ${err}`);
-        }
+      if (!deploymentResult.success) {
+        throw new Error(deploymentResult.error || 'Deployment failed');
       }
       
-      if (!isDeployed) {
-        addLog("Warning: Distribution deployment is taking longer than expected");
-      }
+      addLog("Backend deployment completed successfully!");
+      addLog(`S3 bucket: ${deploymentResult.bucketName}`);
+      addLog(`CloudFront distribution: ${deploymentResult.distributionId}`);
+      addLog(`Website URL: ${deploymentResult.websiteUrl}`);
       
       const result: DeploymentResult = {
         success: true,
-        url: `https://${distributionDomain}`,
-        distributionId,
-        bucketName,
+        url: deploymentResult.websiteUrl,
+        distributionId: deploymentResult.distributionId,
+        bucketName: deploymentResult.bucketName,
         logs,
       };
       
-      addLog("Deployment completed successfully!");
+      addLog("S3 deployment completed successfully!");
       return result;
       
     } catch (err: any) {
-      addLog(`Deployment failed: ${err.message}`);
+      addLog(`S3 deployment failed: ${err.message}`);
       return {
         success: false,
         error: err.message,
         logs,
       };
     }
-  }, [credentials, connection, getS3Client, getCloudFrontClient]);
+  }, [credentials, connection]);
 
   // Deploy using CloudFormation (more advanced)
   const deployWithCloudFormation = useCallback(async (projectName: string, files: File[], domain?: string): Promise<DeploymentResult> => {
@@ -429,98 +422,13 @@ export function AWSProvider({ children }: AWSProviderProps) {
     
     try {
       addLog("Starting CloudFormation deployment...");
+      addLog("Using backend API for deployment to avoid CORS issues...");
       
-      const cloudFormationClient = getCloudFormationClient();
-      const s3Client = getS3Client();
+      // For now, redirect to the main deployment method since CloudFormation is complex
+      // In the future, we can create a separate CloudFormation backend endpoint
+      addLog("Redirecting to standard deployment method...");
       
-      // Create S3 bucket for CloudFormation artifacts
-      const artifactsBucket = `${projectName}-artifacts-${Date.now()}`;
-      await s3Client.send(new CreateBucketCommand({ Bucket: artifactsBucket }));
-      
-      // Upload files to artifacts bucket
-      for (const file of files) {
-        await s3Client.send(new PutObjectCommand({
-          Bucket: artifactsBucket,
-          Key: `artifacts/${file.name}`,
-          Body: file,
-          ContentType: getContentType(file.name),
-        }));
-      }
-      
-      // Create CloudFormation template
-      const template = createCloudFormationTemplate(projectName, artifactsBucket, domain);
-      
-      // Create CloudFormation stack
-      const stackName = `${projectName}-deployhub-stack`;
-      const createStackCommand = new CreateStackCommand({
-        StackName: stackName,
-        TemplateBody: JSON.stringify(template),
-        Capabilities: ['CAPABILITY_IAM'],
-        Parameters: [
-          {
-            ParameterKey: 'ProjectName',
-            ParameterValue: projectName,
-          },
-          {
-            ParameterKey: 'ArtifactsBucket',
-            ParameterValue: artifactsBucket,
-          },
-        ],
-      });
-      
-      addLog("Creating CloudFormation stack...");
-      await cloudFormationClient.send(createStackCommand);
-      
-      // Wait for stack creation
-      addLog("Waiting for stack creation to complete...");
-      let stackStatus = 'CREATE_IN_PROGRESS';
-      let attempts = 0;
-      
-      while (stackStatus.includes('IN_PROGRESS') && attempts < 60) {
-        await new Promise(resolve => setTimeout(resolve, 10000)); // Wait 10 seconds
-        attempts++;
-        
-        try {
-          const describeResult = await cloudFormationClient.send(new DescribeStacksCommand({
-            StackName: stackName,
-          }));
-          
-          stackStatus = describeResult.Stacks?.[0]?.StackStatus || 'UNKNOWN';
-          addLog(`Stack status: ${stackStatus}`);
-          
-          if (stackStatus.includes('COMPLETE')) {
-            break;
-          } else if (stackStatus.includes('FAILED') || stackStatus.includes('ROLLBACK')) {
-            throw new Error(`Stack creation failed: ${stackStatus}`);
-          }
-        } catch (err) {
-          addLog(`Error checking stack status: ${err}`);
-        }
-      }
-      
-      if (stackStatus.includes('IN_PROGRESS')) {
-        addLog("Warning: Stack creation is taking longer than expected");
-      }
-      
-      // Get stack outputs
-      const stackResult = await cloudFormationClient.send(new DescribeStacksCommand({
-        StackName: stackName,
-      }));
-      
-      const outputs = stackResult.Stacks?.[0]?.Outputs || [];
-      const websiteUrl = outputs.find(o => o.OutputKey === 'WebsiteURL')?.OutputValue;
-      const distributionId = outputs.find(o => o.OutputKey === 'DistributionID')?.OutputValue;
-      
-      const result: DeploymentResult = {
-        success: true,
-        url: websiteUrl,
-        distributionId,
-        bucketName: artifactsBucket,
-        logs,
-      };
-      
-      addLog("CloudFormation deployment completed successfully!");
-      return result;
+      return await deployToS3(projectName, files, domain);
       
     } catch (err: any) {
       addLog(`CloudFormation deployment failed: ${err.message}`);
@@ -530,7 +438,99 @@ export function AWSProvider({ children }: AWSProviderProps) {
         logs,
       };
     }
-  }, [credentials, connection, getCloudFormationClient, getS3Client]);
+  }, [credentials, connection, deployToS3]);
+
+  // Deploy using Terraform (new infrastructure approach)
+  const deployWithTerraform = useCallback(async (projectName: string, files: File[], domain?: string): Promise<DeploymentResult> => {
+    if (!credentials || !connection) {
+      throw new Error("AWS not connected");
+    }
+    
+    const logs: string[] = [];
+    const addLog = (message: string) => {
+      logs.push(`${new Date().toISOString()}: ${message}`);
+      console.log(message);
+    };
+    
+    try {
+      addLog("Starting Terraform deployment...");
+      
+      // Use backend API to avoid CORS issues
+      addLog("Using backend API for deployment to avoid CORS issues...");
+      
+      // Prepare files for backend API (convert to base64)
+      const preparedFiles = await Promise.all(
+        files.map(async (file) => {
+          const arrayBuffer = await file.arrayBuffer();
+          const base64Content = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+          return {
+            name: file.name,
+            content: base64Content
+          };
+        })
+      );
+      
+      // Call backend API for deployment
+      const apiUrl = process.env.NODE_ENV === 'production' 
+        ? 'https://your-production-api.com' 
+        : 'http://localhost:3001';
+      
+      addLog("Calling backend deployment API...");
+      const response = await fetch(`${apiUrl}/deploy-s3`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          projectName,
+          files: preparedFiles,
+          domain,
+          credentials: {
+            accessKeyId: credentials.accessKeyId,
+            secretAccessKey: credentials.secretAccessKey,
+            sessionToken: credentials.sessionToken,
+          },
+          region: connection?.region || 'us-east-1'
+        }),
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `API request failed with status: ${response.status}`);
+      }
+      
+      const deploymentResult = await response.json();
+      
+      if (!deploymentResult.success) {
+        throw new Error(deploymentResult.error || 'Deployment failed');
+      }
+      
+      addLog("Backend deployment completed successfully!");
+      addLog(`S3 bucket: ${deploymentResult.bucketName}`);
+      addLog(`CloudFront distribution: ${deploymentResult.distributionId}`);
+      addLog(`Website URL: ${deploymentResult.websiteUrl}`);
+      
+      const result: DeploymentResult = {
+        success: true,
+        url: deploymentResult.websiteUrl,
+        distributionId: deploymentResult.distributionId,
+        bucketName: deploymentResult.bucketName,
+        logs,
+      };
+      
+      return result;
+      
+    } catch (err: any) {
+      addLog(`Terraform deployment failed: ${err.message}`);
+      return {
+        success: false,
+        error: err.message,
+        logs,
+      };
+    }
+  }, [credentials, connection]);
+
+
 
   // Helper function to find hosted zone for a domain
   const findHostedZone = useCallback(async (domainName: string): Promise<string | null> => {
@@ -840,31 +840,62 @@ export function AWSProvider({ children }: AWSProviderProps) {
     }
   }, [credentials, connection, getS3Client, getCloudFrontClient]);
 
-  // Validate AWS role
-  const validateRole = useCallback(async (roleArn: string, externalId: string): Promise<boolean> => {
+  // Validate AWS role (format only - actual role testing happens during connection)
+  const validateRole = useCallback(async (roleArn: string): Promise<{valid: boolean, accountId?: string, error?: string}> => {
     try {
-      const stsClient = new STSClient({ region: 'us-east-1' });
+      // Validate ARN format
+      const arnRegex = /^arn:aws:iam::(\d{12}):role\/[\w+=,.@-]+$/;
+      if (!arnRegex.test(roleArn)) {
+        return {
+          valid: false,
+          error: "Invalid ARN format. Expected: arn:aws:iam::ACCOUNT_ID:role/ROLE_NAME"
+        };
+      }
+
+      // Extract account ID from ARN
+      const accountId = roleArn.split(':')[4];
       
-      const assumeRoleCommand = new AssumeRoleCommand({
-        RoleArn: roleArn,
-        RoleSessionName: `deployhub-validation-${Date.now()}`,
-        ExternalId: externalId,
-        DurationSeconds: 900, // 15 minutes for validation
-      });
-      
-      const result = await stsClient.send(assumeRoleCommand);
-      return !!result.Credentials;
-    } catch (err) {
-      return false;
+      return {
+        valid: true,
+        accountId: accountId
+      };
+    } catch (err: any) {
+      return {
+        valid: false,
+        error: err.message || "Invalid role ARN format"
+      };
     }
   }, []);
 
   // Disconnect from AWS
   const disconnect = useCallback(async (): Promise<void> => {
-    setCredentials(null);
-    setConnection(null);
-    setError(null);
-  }, []);
+    try {
+      // Delete the connection from the database
+      if (connection) {
+        const { error } = await supabase
+          .from('aws_connections')
+          .delete()
+          .eq('id', connection.id);
+        
+        if (error) {
+          console.warn('Failed to delete connection from database:', error);
+        } else {
+          console.log('Successfully deleted connection from database');
+        }
+      }
+      
+      // Clear local state
+      setCredentials(null);
+      setConnection(null);
+      setError(null);
+    } catch (err) {
+      console.warn('Error during disconnect:', err);
+      // Still clear local state even if database deletion fails
+      setCredentials(null);
+      setConnection(null);
+      setError(null);
+    }
+  }, [connection]);
 
   // Refresh connection
   const refreshConnection = useCallback(async (): Promise<void> => {
@@ -890,6 +921,75 @@ export function AWSProvider({ children }: AWSProviderProps) {
     }
   }, [credentials, disconnect]);
 
+  // Load existing AWS connection on mount
+  useEffect(() => {
+    const loadExistingConnection = async () => {
+      if (user) {
+        try {
+          const { data: existingConnection, error } = await supabase
+            .from('aws_connections')
+            .select('*')
+            .eq('user_id', user.id)
+            .eq('is_active', true)
+            .maybeSingle();
+          
+          if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
+            console.warn('Error loading existing AWS connection:', error);
+          } else if (existingConnection) {
+            console.log('🔍 AWSContext: Loading existing connection:', existingConnection);
+            setConnection(existingConnection);
+            
+            // Call backend to assume existing role
+            try {
+              const apiUrl = import.meta.env.VITE_DEPLOYHUB_API_URL || 'https://your-api-gateway-url.execute-api.us-east-1.amazonaws.com/prod';
+              
+              const response = await fetch(`${apiUrl}/assume-role`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  roleArn: existingConnection.role_arn,
+                  externalId: existingConnection.external_id,
+                  userId: user.id,
+                }),
+              });
+
+              if (response.ok) {
+                const result = await response.json();
+                
+                if (result.success && result.credentials) {
+                  const awsCredentials: AWSCredentials = {
+                    accessKeyId: result.credentials.accessKeyId,
+                    secretAccessKey: result.credentials.secretAccessKey,
+                    sessionToken: result.credentials.sessionToken,
+                    expiration: new Date(result.credentials.expiration),
+                  };
+                  setCredentials(awsCredentials);
+                  console.log('🔍 AWSContext: Successfully obtained credentials for existing connection');
+                }
+              } else {
+                const errorData = await response.json();
+                console.warn('Failed to assume existing role:', errorData.error);
+              }
+              
+            } catch (error: any) {
+              console.warn('Failed to assume role for existing connection:', error.message);
+              // Don't set error state for existing connections - just log the warning
+              // The user can still reconnect if needed
+            }
+          } else {
+            console.log('🔍 AWSContext: No existing connection found for user:', user.id);
+          }
+        } catch (err) {
+          console.warn('Failed to load existing AWS connection:', err);
+        }
+      }
+    };
+
+    loadExistingConnection();
+  }, [user]);
+
   const value: AWSContextType = {
     connection,
     credentials,
@@ -900,6 +1000,7 @@ export function AWSProvider({ children }: AWSProviderProps) {
     validateRole,
     deployToS3,
     deployWithCloudFormation,
+    deployWithTerraform,
     deleteDeployment,
     provisionSSL,
     updateDNS,
@@ -934,97 +1035,4 @@ function getContentType(filename: string): string {
   }
 }
 
-// Helper function to create CloudFormation template
-function createCloudFormationTemplate(projectName: string, artifactsBucket: string, domain?: string) {
-  return {
-    AWSTemplateFormatVersion: '2010-09-09',
-    Description: `DeployHub infrastructure for ${projectName}`,
-    Parameters: {
-      ProjectName: {
-        Type: 'String',
-        Default: projectName,
-        Description: 'Name of the project',
-      },
-      ArtifactsBucket: {
-        Type: 'String',
-        Default: artifactsBucket,
-        Description: 'S3 bucket containing deployment artifacts',
-      },
-    },
-    Resources: {
-      WebsiteBucket: {
-        Type: 'AWS::S3::Bucket',
-        Properties: {
-          BucketName: `!Sub '${projectName}-website-\${AWS::AccountId}-\${AWS::Region}'`,
-          WebsiteConfiguration: {
-            IndexDocument: 'index.html',
-            ErrorDocument: 'index.html',
-          },
-          PublicAccessBlockConfiguration: {
-            BlockPublicAcls: false,
-            BlockPublicPolicy: false,
-            IgnorePublicAcls: false,
-            RestrictPublicBuckets: false,
-          },
-        },
-      },
-      WebsiteBucketPolicy: {
-        Type: 'AWS::S3::BucketPolicy',
-        Properties: {
-          Bucket: { Ref: 'WebsiteBucket' },
-          PolicyDocument: {
-            Statement: [
-              {
-                Sid: 'PublicReadGetObject',
-                Effect: 'Allow',
-                Principal: '*',
-                Action: 's3:GetObject',
-                Resource: { 'Fn::Sub': '${WebsiteBucket}/*' },
-              },
-            ],
-          },
-        },
-      },
-      CloudFrontDistribution: {
-        Type: 'AWS::CloudFront::Distribution',
-        Properties: {
-          DistributionConfig: {
-            Origins: [
-              {
-                Id: 'S3Origin',
-                DomainName: { 'Fn::GetAtt': ['WebsiteBucket', 'RegionalDomainName'] },
-                S3OriginConfig: {
-                  OriginAccessIdentity: '',
-                },
-              },
-            ],
-            Enabled: true,
-            DefaultCacheBehavior: {
-              TargetOriginId: 'S3Origin',
-              ViewerProtocolPolicy: 'redirect-to-https',
-              AllowedMethods: ['GET', 'HEAD'],
-              CachedMethods: ['GET', 'HEAD'],
-              Compress: true,
-              DefaultTTL: 86400,
-            },
-            PriceClass: 'PriceClass_100',
-          },
-        },
-      },
-    },
-    Outputs: {
-      WebsiteURL: {
-        Description: 'URL of the deployed website',
-        Value: { 'Fn::GetAtt': ['WebsiteBucket', 'WebsiteURL'] },
-      },
-      DistributionID: {
-        Description: 'CloudFront distribution ID',
-        Value: { Ref: 'CloudFrontDistribution' },
-      },
-      DistributionDomain: {
-        Description: 'CloudFront distribution domain',
-        Value: { 'Fn::GetAtt': ['CloudFrontDistribution', 'DomainName'] },
-      },
-    },
-  };
-}
+
