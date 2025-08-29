@@ -24,6 +24,38 @@ export default function Settings() {
   const { connection, disconnect } = useAWS();
   const { projects, deleteProject } = useProjects();
   
+  console.log('Settings page loaded');
+  console.log('Projects array:', projects);
+  console.log('Projects length:', projects.length);
+  console.log('deleteProject function:', deleteProject);
+  
+  const handleDeleteProject = async (project: any) => {
+    console.log('Delete button clicked for project:', project);
+    console.log('Project ID:', project.id);
+    console.log('Project name:', project.name);
+    
+    const shouldCleanupAWS = confirm(
+      `Are you sure you want to delete "${project.name}"?\n\n` +
+      `This will:\n` +
+      `• Remove the project from DeployHub\n` +
+      `• ${project.awsBucket || project.awsDistributionId ? 'Clean up AWS resources (S3 bucket, CloudFront distribution)' : 'No AWS resources to clean up'}\n\n` +
+      `This action cannot be undone.`
+    );
+    
+    console.log('User confirmed deletion:', shouldCleanupAWS);
+    
+    if (shouldCleanupAWS) {
+      console.log('Calling deleteProject function...');
+      const success = await deleteProject(project.id);
+      console.log('deleteProject result:', success);
+      if (success) {
+        alert(`Project "${project.name}" deleted successfully!${project.awsBucket || project.awsDistributionId ? '\n\nAWS resources have been cleaned up.' : ''}`);
+      } else {
+        console.error('Failed to delete project');
+      }
+    }
+  };
+  
   return (
     <Layout>
       <div className="container mx-auto px-4 py-8 max-w-4xl">
@@ -32,6 +64,57 @@ export default function Settings() {
           <p className="text-muted-foreground mt-2">
             Manage your account and deployment preferences
           </p>
+        </div>
+
+        {/* Debug Section */}
+        <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+          <h3 className="font-medium text-yellow-800 mb-2">Debug Info</h3>
+          <p className="text-sm text-yellow-700">Projects: {projects.length}</p>
+          <p className="text-sm text-yellow-700">deleteProject function: {typeof deleteProject}</p>
+          <Button 
+            onClick={() => {
+              console.log('Test button clicked!');
+              alert('Test button works!');
+            }}
+            variant="outline"
+            size="sm"
+          >
+            Test Button
+          </Button>
+          
+          {/* Simple HTML button test */}
+          <div className="mt-4">
+            <p className="text-sm text-yellow-700 mb-2">Testing with HTML button:</p>
+            <button 
+              type="button"
+              onClick={() => {
+                console.log('HTML button clicked!');
+                alert('HTML button works!');
+              }}
+              style={{
+                padding: '8px 16px',
+                backgroundColor: '#ef4444',
+                color: 'white',
+                border: 'none',
+                borderRadius: '6px',
+                cursor: 'pointer'
+              }}
+            >
+              HTML Delete Test
+            </button>
+          </div>
+          
+          {/* Project info display */}
+          <div className="mt-4">
+            <p className="text-sm text-yellow-700 mb-2">Project details:</p>
+            {projects.map((project, index) => (
+              <div key={project.id} className="text-xs text-yellow-600 mb-2">
+                <p>Project {index + 1}: {project.name} (ID: {project.id})</p>
+                <p>Domain: {project.domain} | Status: {project.status}</p>
+                <p>AWS: {project.awsBucket || 'No bucket'} | CloudFront: {project.awsDistributionId || 'No distribution'}</p>
+              </div>
+            ))}
+          </div>
         </div>
 
         <div className="grid gap-6">
@@ -271,31 +354,51 @@ export default function Settings() {
                           </p>
                         )}
                       </div>
-                      <Button 
-                        variant="destructive" 
-                        size="sm"
-                        onClick={async () => {
-                          const shouldCleanupAWS = confirm(
-                            `Are you sure you want to delete "${project.name}"?\n\n` +
-                            `This will:\n` +
-                            `• Remove the project from DeployHub\n` +
-                            `• ${project.awsBucket || project.awsDistributionId ? 'Clean up AWS resources (S3 bucket, CloudFront distribution)' : 'No AWS resources to clean up'}\n\n` +
-                            `This action cannot be undone.`
-                          );
-                          
-                          if (shouldCleanupAWS) {
-                            const success = await deleteProject(project.id, true);
-                            if (success) {
-                              alert(`Project "${project.name}" deleted successfully!${project.awsBucket || project.awsDistributionId ? '\n\nAWS resources have been cleaned up.' : ''}`);
-                            } else {
-                              alert(`Failed to delete project "${project.name}". Please try again.`);
-                            }
-                          }
-                        }}
-                      >
-                        <Trash2 className="h-4 w-4 mr-2" />
-                        Delete Project
-                      </Button>
+                      <div className="flex items-center space-x-2">
+                        <div className="text-xs text-red-600 mb-2">
+                          Button section rendered - Project: {project.name}
+                        </div>
+                        <Button 
+                          variant="destructive" 
+                          size="sm"
+                          onClick={() => {
+                            console.log('Delete Project button clicked!');
+                            console.log('Project:', project);
+                            handleDeleteProject(project);
+                          }}
+                          style={{
+                            border: '3px solid red',
+                            backgroundColor: '#dc2626',
+                            color: 'white',
+                            fontWeight: 'bold',
+                            fontSize: '16px',
+                            padding: '12px 20px'
+                          }}
+                        >
+                          <Trash2 className="h-4 w-4 mr-2" />
+                          DELETE PROJECT
+                        </Button>
+                        
+                        {/* Simple HTML button test */}
+                        <button 
+                          type="button"
+                          onClick={() => {
+                            console.log('HTML delete button clicked for project:', project.name);
+                            alert(`HTML delete button works for: ${project.name}`);
+                          }}
+                          style={{
+                            padding: '6px 12px',
+                            backgroundColor: '#dc2626',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '4px',
+                            cursor: 'pointer',
+                            fontSize: '14px'
+                          }}
+                        >
+                          HTML Delete
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>

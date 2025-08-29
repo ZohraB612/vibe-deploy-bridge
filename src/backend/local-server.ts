@@ -42,6 +42,21 @@ const lambdaToExpress = (lambdaHandler: any) => {
 };
 
 // Routes
+app.get('/', (req, res) => {
+  res.json({ 
+    message: 'DeployHub Backend API', 
+    version: '1.0.0',
+    endpoints: [
+      'POST /deploy-s3',
+      'GET /health',
+      'GET /check-status/:distributionId',
+      'POST /cleanup-resources',
+      'POST /cleanup-project'
+    ],
+    status: 'running'
+  });
+});
+
 app.post('/deploy-s3', lambdaToExpress(deployS3Handler));
 
 // Health check
@@ -211,11 +226,12 @@ app.post('/cleanup-project', async (req, res) => {
   }
 });
 
-// Start server
-app.listen(PORT, () => {
+// Start server - Bind to both IPv4 and IPv6
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 DeployHub Backend Server running on http://localhost:${PORT}`);
   console.log(`📝 Deploy endpoint: http://localhost:${PORT}/deploy-s3`);
   console.log(`❤️  Health check: http://localhost:${PORT}/health`);
+  console.log(`🌐 Server bound to all interfaces (IPv4 + IPv6)`);
 });
 
 export default app;

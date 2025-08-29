@@ -65,7 +65,7 @@ export default function ProjectDetails() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { getProject } = useProjects();
+  const { getProject, deleteProject } = useProjects();
   
   const project = getProject(id || "");
   
@@ -265,6 +265,46 @@ export default function ProjectDetails() {
     }
   };
 
+  const handleDeleteProject = async () => {
+    console.log('Delete Project button clicked in ProjectDetails!');
+    console.log('Project to delete:', project);
+    
+    const confirmed = confirm(
+      `Are you sure you want to delete "${project.name}"?\n\n` +
+      `This will:\n` +
+      `• Remove the project from DeployHub\n` +
+      `• Clean up AWS resources (S3 bucket, CloudFront distribution)\n\n` +
+      `This action cannot be undone.`
+    );
+    
+    if (confirmed) {
+      console.log('User confirmed deletion, calling deleteProject...');
+      try {
+        const success = await deleteProject(project.id);
+        if (success) {
+          toast({
+            title: "Project Deleted",
+            description: `Project "${project.name}" has been deleted successfully.`,
+          });
+          navigate("/dashboard");
+        } else {
+          toast({
+            title: "Deletion Failed",
+            description: "Failed to delete the project. Please try again.",
+            variant: "destructive",
+          });
+        }
+      } catch (error) {
+        console.error('Error deleting project:', error);
+        toast({
+          title: "Error",
+          description: "An error occurred while deleting the project.",
+          variant: "destructive",
+        });
+      }
+    }
+  };
+
   return (
     <Layout>
       <div className="container mx-auto px-4 py-8 max-w-7xl">
@@ -437,7 +477,7 @@ export default function ProjectDetails() {
                             Permanently delete this project and all of its data.
                           </p>
                         </div>
-                        <Button variant="destructive">
+                        <Button variant="destructive" onClick={handleDeleteProject}>
                           Delete Project
                         </Button>
                       </div>
