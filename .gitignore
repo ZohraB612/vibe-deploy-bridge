@@ -451,3 +451,9 @@ coverage/
 # OS files
 .DS_Store
 Thumbs.db
+
+# Large binaries and executables
+kubectl
+kubectl.exe
+*.exe
+*.bin
