@@ -17,6 +17,14 @@ export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
     headers: {
       'X-Client-Info': 'deployhub-web@1.0.0'
     }
+  },
+  db: {
+    schema: 'public'
+  },
+  realtime: {
+    params: {
+      eventsPerSecond: 10
+    }
   }
 })
 
@@ -140,4 +148,27 @@ export const isDevelopment = import.meta.env.DEV
 // Development warning
 if (isDevelopment && (supabaseUrl.includes('your-project') || supabaseAnonKey.includes('your-anon-key'))) {
   console.warn('⚠️ Supabase configuration needed! Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your .env file')
+}
+
+// Connection health check
+export const checkSupabaseConnection = async (): Promise<boolean> => {
+  try {
+    const { data, error } = await supabase.from('_health_check').select('*').limit(1);
+    return !error;
+  } catch {
+    return false;
+  }
+}
+
+// Safe Supabase query wrapper
+export const safeSupabaseQuery = async <T>(
+  queryFn: () => Promise<{ data: T | null; error: any }>,
+  fallback: T | null = null
+): Promise<{ data: T | null; error: any }> => {
+  try {
+    return await queryFn();
+  } catch (error) {
+    console.warn('Supabase query failed, using fallback:', error);
+    return { data: fallback, error: null };
+  }
 }

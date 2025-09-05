@@ -42,6 +42,8 @@ export default function Dashboard() {
   const { projects, isLoading, error, refreshProjects } = useProjects();
   const { hasAWSConnection, isLoading: isAWSLoading } = useAWSStatus();
 
+  // Debug logging removed - issue was auth listener causing unnecessary re-renders
+
   // Show AWS setup prompt if user doesn't have AWS connection
   if (!isAWSLoading && hasAWSConnection === false) {
     return (

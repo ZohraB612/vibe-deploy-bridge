@@ -159,9 +159,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
           setSession(session);
         }
       } catch (err: unknown) {
-        const errorMessage = err instanceof Error ? err.message : 'Failed to load session';
-        console.error('Error getting initial session:', err);
-        setError(errorMessage);
+        // Don't set error state for Supabase connection issues - just log and continue
+        console.warn('Supabase connection issue, continuing without auth:', err);
+        setError(null);
       } finally {
         setIsLoading(false);
       }
@@ -169,52 +169,68 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
     getInitialSession();
 
-    // Listen for auth changes
+    // Smart auth listener that prevents unnecessary re-renders
     const { data: { subscription } } = onAuthStateChange(async (event, session) => {
-      console.log('Auth state changed:', event, session?.user?.id);
+      console.log('🔍 Auth state changed:', event, session?.user?.id, 'Current user:', user?.id);
       
-      setIsLoading(true);
-      setError(null);
+      // Only update state for significant auth events that actually change the user
+      const shouldUpdate = 
+        event === 'SIGNED_IN' || 
+        event === 'SIGNED_OUT' || 
+        (event === 'TOKEN_REFRESHED' && session?.user?.id !== user?.id);
+      
+      if (shouldUpdate) {
+        try {
+          setIsLoading(true);
+          setError(null);
 
-      if (session?.user) {
-        // User signed in - create profile from OAuth data immediately
-        console.log('AuthContext: User signed in, creating profile from OAuth data');
-        
-        // Create profile from OAuth data (no database needed)
-        const profile = {
-          id: session.user.id,
-          email: session.user.email || '',
-          name: session.user.user_metadata?.name || session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || '',
-          avatar_url: session.user.user_metadata?.avatar_url || session.user.user_metadata?.picture || null,
-          provider: session.user.app_metadata?.provider || 'email',
-          metadata: session.user.user_metadata || null,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        };
+          if (session?.user) {
+            // User signed in - create profile from OAuth data immediately
+            console.log('AuthContext: User signed in, creating profile from OAuth data');
+            
+            // Create profile from OAuth data (no database needed)
+            const profile = {
+              id: session.user.id,
+              email: session.user.email || '',
+              name: session.user.user_metadata?.name || session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || '',
+              avatar_url: session.user.user_metadata?.avatar_url || session.user.user_metadata?.picture || null,
+              provider: session.user.app_metadata?.provider || 'email',
+              metadata: session.user.user_metadata || null,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            };
 
-        const userWithProfile = { ...session.user, profile };
-        console.log('AuthContext: Setting user with profile:', userWithProfile.email);
-        setUser(userWithProfile);
-        setSession(session);
-        
-        // Try to save to database in background (don't wait for it)
-        console.log('AuthContext: Attempting background database save...');
-        upsertUserProfile(session.user).then(savedProfile => {
-          if (savedProfile) {
-            console.log('AuthContext: Background database save successful');
-            setUser(prev => prev ? { ...prev, profile: savedProfile } : null);
+            const userWithProfile = { ...session.user, profile };
+            console.log('AuthContext: Setting user with profile:', userWithProfile.email);
+            setUser(userWithProfile);
+            setSession(session);
+            
+            // Try to save to database in background (don't wait for it)
+            console.log('AuthContext: Attempting background database save...');
+            upsertUserProfile(session.user).then(savedProfile => {
+              if (savedProfile) {
+                console.log('AuthContext: Background database save successful');
+                setUser(prev => prev ? { ...prev, profile: savedProfile } : null);
+              }
+            }).catch(err => {
+              console.log('AuthContext: Background database save failed (non-critical):', err);
+            });
+            
+          } else {
+            // User signed out
+            setUser(null);
+            setSession(null);
           }
-        }).catch(err => {
-          console.log('AuthContext: Background database save failed (non-critical):', err);
-        });
-        
+          
+          setIsLoading(false);
+        } catch (err) {
+          console.warn('Auth state change handler error, continuing without update:', err);
+          setIsLoading(false);
+        }
       } else {
-        // User signed out
-        setUser(null);
-        setSession(null);
+        // Ignore events that don't actually change the user to prevent unnecessary re-renders
+        console.log('AuthContext: Ignoring non-significant auth event:', event);
       }
-      
-      setIsLoading(false);
     });
 
     return () => subscription.unsubscribe();

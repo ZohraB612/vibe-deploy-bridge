@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import { createClient } from '@supabase/supabase-js';
 import { deployToS3 } from './deploy-s3';
+import { deployToS3Enhanced } from './enhanced-deploy-s3';
 import { cleanupProject } from './cleanup-project';
 
 // Define proper types for the Lambda-style handlers
@@ -64,8 +65,9 @@ app.get('/health', (req, res) => {
   res.json({ status: 'healthy', timestamp: new Date().toISOString() });
 });
 
-// Deploy endpoint
+// Deploy endpoints
 app.post('/deploy-s3', lambdaToExpress(deployToS3));
+app.post('/deploy-s3-enhanced', lambdaToExpress(deployToS3Enhanced));
 
 // Cleanup endpoint
 app.post('/cleanup-project', lambdaToExpress(cleanupProject));
