@@ -61,7 +61,8 @@ export function ResourceCleanup({ credentials, region }: ResourceCleanupProps) {
       const bucketList = bucketNames.trim() ? bucketNames.split('\n').map(b => b.trim()).filter(b => b) : [];
       const distributionList = distributionIds.trim() ? distributionIds.split('\n').map(d => d.trim()).filter(d => d) : [];
 
-      const response = await fetch('http://localhost:3001/cleanup-resources', {
+      const apiUrl = import.meta.env.VITE_DEPLOYHUB_API_URL || 'http://localhost:3001';
+      const response = await fetch(`${apiUrl}/cleanup-resources`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

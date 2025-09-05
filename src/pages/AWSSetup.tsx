@@ -28,16 +28,26 @@ const steps = [
   },
   {
     id: 2,
-    title: "Create IAM Role",
-    description: "Set up permissions in your AWS account"
+    title: "Create IAM Policy",
+    description: "Set up the DeployHub permissions policy"
   },
   {
     id: 3,
-    title: "Configure Policy",
-    description: "Add the required permissions policy"
+    title: "Create IAM Role",
+    description: "Start creating the role with trusted entity"
   },
   {
     id: 4,
+    title: "Attach Policy to Role",
+    description: "Add the DeployHub policy to your role"
+  },
+  {
+    id: 5,
+    title: "Name & Configure Role",
+    description: "Finalize role settings and create it"
+  },
+  {
+    id: 6,
     title: "Enter Role ARN", 
     description: "Complete the connection"
   }
@@ -57,14 +67,31 @@ const awsPolicy = {
         "s3:DeleteObject",
         "s3:ListBucket",
         "s3:PutBucketWebsite",
+        "s3:GetBucketWebsite",
+        "s3:DeleteBucketWebsite",
         "s3:PutBucketPolicy",
         "s3:GetBucketPolicy",
-        "s3:DeleteBucketPolicy"
+        "s3:DeleteBucketPolicy",
+        "s3:PutBucketCors",
+        "s3:GetBucketCors",
+        "s3:PutBucketPublicAccessBlock",
+        "s3:GetBucketPublicAccessBlock",
+        "s3:GetBucketLocation",
+        "s3:GetBucketVersioning",
+        "s3:PutBucketVersioning"
       ],
       "Resource": [
         "arn:aws:s3:::deployhub-*",
         "arn:aws:s3:::deployhub-*/*"
       ]
+    },
+    {
+      "Sid": "DeployHubS3ListAllBuckets",
+      "Effect": "Allow",
+      "Action": [
+        "s3:ListAllMyBuckets"
+      ],
+      "Resource": "*"
     },
     {
       "Sid": "DeployHubCloudFrontAccess",
@@ -74,8 +101,11 @@ const awsPolicy = {
         "cloudfront:UpdateDistribution",
         "cloudfront:DeleteDistribution",
         "cloudfront:GetDistribution",
+        "cloudfront:GetDistributionConfig",
+        "cloudfront:ListDistributions",
         "cloudfront:CreateInvalidation",
-        "cloudfront:GetInvalidation"
+        "cloudfront:GetInvalidation",
+        "cloudfront:ListInvalidations"
       ],
       "Resource": "*"
     },
@@ -88,7 +118,10 @@ const awsPolicy = {
         "cloudformation:DeleteStack",
         "cloudformation:DescribeStacks",
         "cloudformation:DescribeStackEvents",
-        "cloudformation:ValidateTemplate"
+        "cloudformation:DescribeStackResources",
+        "cloudformation:ValidateTemplate",
+        "cloudformation:GetTemplate",
+        "cloudformation:ListStacks"
       ],
       "Resource": "arn:aws:cloudformation:*:*:stack/deployhub-*"
     },
@@ -99,7 +132,8 @@ const awsPolicy = {
         "route53:GetHostedZone",
         "route53:ListHostedZones",
         "route53:ChangeResourceRecordSets",
-        "route53:GetChange"
+        "route53:GetChange",
+        "route53:ListResourceRecordSets"
       ],
       "Resource": "*"
     },
@@ -110,21 +144,38 @@ const awsPolicy = {
         "acm:RequestCertificate",
         "acm:DescribeCertificate",
         "acm:DeleteCertificate",
-        "acm:ListCertificates"
+        "acm:ListCertificates",
+        "acm:GetCertificate"
       ],
       "Resource": "*"
     },
     {
-      "Sid": "DeployHubIAMPassRole",
+      "Sid": "DeployHubIAMAccess",
       "Effect": "Allow",
-      "Action": "iam:PassRole",
+      "Action": [
+        "iam:PassRole",
+        "iam:CreateRole",
+        "iam:DeleteRole",
+        "iam:AttachRolePolicy",
+        "iam:DetachRolePolicy",
+        "iam:GetRole",
+        "iam:ListAttachedRolePolicies",
+        "iam:ListRolePolicies",
+        "iam:GetRolePolicy",
+        "iam:PutRolePolicy",
+        "iam:DeleteRolePolicy"
+      ],
       "Resource": "arn:aws:iam::*:role/deployhub-*"
-      },
+    },
     {
-      "Sid": "DeployHubSTSAssumeRole",
+      "Sid": "DeployHubSTSAccess",
       "Effect": "Allow",
-      "Action": "sts:AssumeRole",
-      "Resource": "arn:aws:iam::*:role/deployhub-*"
+      "Action": [
+        "sts:AssumeRole",
+        "sts:GetCallerIdentity",
+        "sts:GetSessionToken"
+      ],
+      "Resource": "*"
     },
     {
       "Sid": "DeployHubCloudWatchAccess",
@@ -132,7 +183,11 @@ const awsPolicy = {
       "Action": [
         "cloudwatch:PutMetricData",
         "cloudwatch:GetMetricData",
-        "cloudwatch:ListMetrics"
+        "cloudwatch:ListMetrics",
+        "cloudwatch:GetMetricStatistics",
+        "cloudwatch:DescribeAlarms",
+        "cloudwatch:PutMetricAlarm",
+        "cloudwatch:DeleteAlarms"
       ],
       "Resource": "*"
     },
@@ -144,9 +199,51 @@ const awsPolicy = {
         "logs:CreateLogStream",
         "logs:PutLogEvents",
         "logs:DescribeLogGroups",
-        "logs:DescribeLogStreams"
+        "logs:DescribeLogStreams",
+        "logs:GetLogEvents",
+        "logs:FilterLogEvents"
       ],
       "Resource": "arn:aws:logs:*:*:log-group:/aws/deployhub/*"
+    },
+    {
+      "Sid": "DeployHubLambdaAccess",
+      "Effect": "Allow",
+      "Action": [
+        "lambda:CreateFunction",
+        "lambda:DeleteFunction",
+        "lambda:GetFunction",
+        "lambda:ListFunctions",
+        "lambda:UpdateFunctionCode",
+        "lambda:UpdateFunctionConfiguration",
+        "lambda:InvokeFunction",
+        "lambda:AddPermission",
+        "lambda:RemovePermission"
+      ],
+      "Resource": "arn:aws:lambda:*:*:function:deployhub-*"
+    },
+    {
+      "Sid": "DeployHubAPIGatewayAccess",
+      "Effect": "Allow",
+      "Action": [
+        "apigateway:GET",
+        "apigateway:POST",
+        "apigateway:PUT",
+        "apigateway:DELETE",
+        "apigateway:PATCH"
+      ],
+      "Resource": "arn:aws:apigateway:*::/restapis/*"
+    },
+    {
+      "Sid": "DeployHubEC2Access",
+      "Effect": "Allow",
+      "Action": [
+        "ec2:DescribeRegions",
+        "ec2:DescribeAvailabilityZones",
+        "ec2:DescribeVpcs",
+        "ec2:DescribeSubnets",
+        "ec2:DescribeSecurityGroups"
+      ],
+      "Resource": "*"
     }
   ]
 };
@@ -368,7 +465,7 @@ export default function AWSSetup() {
               </div>
             )}
 
-            {/* Step 2: Create IAM Role */}
+            {/* Step 2: Create IAM Policy */}
             {currentStep === 2 && (
               <div className="space-y-6">
                 <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg">
@@ -383,14 +480,14 @@ export default function AWSSetup() {
 
                 <div className="space-y-4">
                   <div className="p-4 border rounded-lg bg-green-50 border-green-200">
-                    <h4 className="font-medium mb-2 text-green-800">🚀 Step 1: Create the DeployHub Policy First</h4>
+                    <h4 className="font-medium mb-2 text-green-800">🚀 Create the DeployHub Policy</h4>
                     <p className="text-sm text-green-700 mb-3">
-                      We'll create the policy first, then create the role. This makes the process much smoother!
+                      First, we'll create the permissions policy that DeployHub needs to deploy your applications.
                     </p>
                     
                     <div className="p-3 bg-white rounded border border-blue-200">
                       <p className="font-medium text-blue-800 mb-2">📋 Copy the DeployHub Policy:</p>
-                      <div className="bg-gray-50 p-2 rounded text-xs font-mono mb-2">
+                      <div className="bg-gray-50 p-2 rounded text-xs font-mono mb-2 max-h-40 overflow-y-auto">
                         {JSON.stringify(awsPolicy, null, 2)}
                       </div>
                       <Button 
@@ -406,14 +503,18 @@ export default function AWSSetup() {
 
                     {/* Security Information */}
                     <div className="p-3 bg-amber-50 border border-amber-200 rounded">
-                      <h5 className="font-medium text-amber-800 mb-2">🔒 Security Features of This Policy:</h5>
+                      <h5 className="font-medium text-amber-800 mb-2">🔒 Security Features of This Enhanced Policy:</h5>
                       <ul className="text-xs text-amber-700 space-y-1 ml-4">
                         <li>• <strong>Project-scoped:</strong> S3 buckets are limited to <code>deployhub-*</code> prefix</li>
                         <li>• <strong>Resource-level permissions:</strong> Only specific actions allowed, not wildcard access</li>
                         <li>• <strong>Stack isolation:</strong> CloudFormation stacks limited to <code>deployhub-*</code> prefix</li>
                         <li>• <strong>Log isolation:</strong> CloudWatch logs limited to <code>/aws/deployhub/*</code> path</li>
                         <li>• <strong>Role scoping:</strong> IAM roles limited to <code>deployhub-*</code> prefix</li>
+                        <li>• <strong>Lambda scoping:</strong> Lambda functions limited to <code>deployhub-*</code> prefix</li>
+                        <li>• <strong>API Gateway scoping:</strong> Only REST API management permissions</li>
+                        <li>• <strong>Enhanced monitoring:</strong> CloudWatch alarms and detailed metrics</li>
                         <li>• <strong>No admin access:</strong> Cannot create/delete users, modify billing, or access other AWS services</li>
+                        <li>• <strong>Future-ready:</strong> Includes permissions for Lambda, API Gateway, and advanced monitoring</li>
                       </ul>
                     </div>
 
@@ -438,29 +539,36 @@ export default function AWSSetup() {
                       </div>
                     </div>
                   </div>
+                </div>
+              </div>
+            )}
 
+            {/* Step 3: Create IAM Role */}
+            {currentStep === 3 && (
+              <div className="space-y-6">
+                <div className="space-y-4">
                   <div className="p-4 border rounded-lg bg-blue-50 border-blue-200">
-                    <h4 className="font-medium mb-2 text-blue-800">📋 Step 2: Create the IAM Role</h4>
+                    <h4 className="font-medium mb-2 text-blue-800">📋 Start Creating the IAM Role</h4>
                     <p className="text-sm text-blue-700 mb-3">
-                      Now that you have the policy, let's create the role and attach it.
+                      Now let's create the IAM role. We'll start by setting up the trusted entity.
                     </p>
                     
                     <div className="flex items-center justify-between p-4 bg-white rounded border">
-                    <div>
+                      <div>
                         <h5 className="font-medium">Open AWS IAM Roles</h5>
                         <p className="text-sm text-muted-foreground">Navigate to the IAM Roles section</p>
-                    </div>
-                    <Button variant="outline" size="sm" asChild>
-                      <a href="https://console.aws.amazon.com/iam/home#/roles" target="_blank" rel="noopener noreferrer">
-                        <ExternalLink className="h-4 w-4 mr-2" />
+                      </div>
+                      <Button variant="outline" size="sm" asChild>
+                        <a href="https://console.aws.amazon.com/iam/home#/roles" target="_blank" rel="noopener noreferrer">
+                          <ExternalLink className="h-4 w-4 mr-2" />
                           Open IAM Roles
-                      </a>
-                    </Button>
+                        </a>
+                      </Button>
                     </div>
                   </div>
 
                   <div className="p-4 border rounded-lg">
-                    <h4 className="font-medium mb-2">Step 2a: Select trusted entity</h4>
+                    <h4 className="font-medium mb-2">Select Trusted Entity</h4>
                     <ol className="text-sm text-muted-foreground space-y-2 ml-4">
                       <li>1. Click "Create role"</li>
                       <li>2. Select "AWS account" as trusted entity type</li>
@@ -468,7 +576,7 @@ export default function AWSSetup() {
                       <li>4. Enter Account ID: <code className="bg-muted px-1 rounded">YOUR_ACCOUNT_ID</code></li>
                       <li>5. Check "Require external ID (Best practice when a third party will assume this role)"</li>
                       <li>6. Enter External ID: <code className="bg-muted px-1 rounded">{externalId}</code></li>
-                      <li>7. Click "Next"</li>
+                      <li>7. Click "Next" to continue</li>
                     </ol>
                     
                     <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded text-sm">
@@ -482,10 +590,28 @@ export default function AWSSetup() {
                   </div>
 
                   <div className="p-4 border rounded-lg bg-green-50 border-green-200">
-                    <h4 className="font-medium mb-2 text-green-800">Step 2b: Add permissions</h4>
-                    <div className="text-sm text-green-700 space-y-2">
-                      <p className="font-medium">Now you can easily select the DeployHubPolicy you just created:</p>
-                      <ol className="space-y-1 ml-4">
+                    <h4 className="font-medium mb-2 text-green-800">✅ What You've Done</h4>
+                    <p className="text-sm text-green-700">
+                      You've set up the trusted entity for your role. This tells AWS which account can assume this role.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Step 4: Attach Policy to Role */}
+            {currentStep === 4 && (
+              <div className="space-y-6">
+                <div className="space-y-4">
+                  <div className="p-4 border rounded-lg bg-green-50 border-green-200">
+                    <h4 className="font-medium mb-2 text-green-800">🔗 Attach the DeployHub Policy</h4>
+                    <p className="text-sm text-green-700 mb-3">
+                      Now you need to attach the DeployHubPolicy you created in Step 2 to your role.
+                    </p>
+                    
+                    <div className="p-4 bg-white rounded border">
+                      <h5 className="font-medium text-blue-800 mb-2">Add Permissions to Your Role:</h5>
+                      <ol className="text-sm text-muted-foreground space-y-2 ml-4">
                         <li>1. In the search box, type "DeployHubPolicy"</li>
                         <li>2. Check the box next to "DeployHubPolicy"</li>
                         <li>3. Click "Next" to continue</li>
@@ -493,8 +619,38 @@ export default function AWSSetup() {
                     </div>
                   </div>
 
+                  <div className="p-4 border rounded-lg bg-blue-50 border-blue-200">
+                    <h4 className="font-medium mb-2 text-blue-900">💡 Why This Step Matters</h4>
+                    <p className="text-sm text-blue-800 mb-3">
+                      The DeployHubPolicy contains all the specific permissions that DeployHub needs to deploy your applications. 
+                      By attaching it to your role, you're giving DeployHub exactly the access it needs - nothing more.
+                    </p>
+                    <div className="bg-white p-3 rounded border">
+                      <h5 className="font-medium text-green-700 mb-2">✅ Security Benefits:</h5>
+                      <ul className="text-sm text-green-700 space-y-1 ml-4">
+                        <li>• Only DeployHub-related resources can be accessed</li>
+                        <li>• All resources are scoped with "deployhub-" prefix</li>
+                        <li>• No admin access or broad permissions</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Step 5: Name & Configure Role */}
+            {currentStep === 5 && (
+              <div className="space-y-6">
+                <div className="space-y-4">
+                  <div className="p-4 border rounded-lg bg-blue-50 border-blue-200">
+                    <h4 className="font-medium mb-2 text-blue-800">⚙️ Name & Configure Your Role</h4>
+                    <p className="text-sm text-blue-700 mb-3">
+                      Now let's give your role a name and add some optional configuration.
+                    </p>
+                  </div>
+
                   <div className="p-4 border rounded-lg">
-                    <h4 className="font-medium mb-2">Step 2c: Name, review, and create</h4>
+                    <h4 className="font-medium mb-2">Role Name & Description</h4>
                     <ol className="text-sm text-muted-foreground space-y-2 ml-4">
                       <li>1. Give your role a name: <code className="bg-muted px-1 rounded">DeployHubRole</code></li>
                       <li>2. Add description: <code className="bg-muted px-1 rounded">Role for DeployHub deployments</code></li>
@@ -504,7 +660,7 @@ export default function AWSSetup() {
                   </div>
 
                   <div className="p-4 border rounded-lg bg-gray-50 border-gray-200">
-                    <h4 className="font-medium mb-2 text-gray-800">Step 2d: Add tags (Optional)</h4>
+                    <h4 className="font-medium mb-2 text-gray-800">Add Tags (Optional)</h4>
                     <div className="text-sm text-gray-700 space-y-2">
                       <p className="font-medium">AWS will show you the "Add tags" section. This is optional but recommended:</p>
                       <div className="ml-4 space-y-2">
@@ -536,73 +692,15 @@ export default function AWSSetup() {
                         <li>• Description: Role for DeployHub deployments</li>
                       </ul>
                       <li>2. Click "Create role"</li>
-                      <li>3. Copy the Role ARN for Step 4 in DeployHub</li>
+                      <li>3. Copy the Role ARN for the next step</li>
                     </ol>
                   </div>
                 </div>
               </div>
             )}
 
-            {/* Step 3: Configure Policy */}
-            {currentStep === 3 && (
-              <div className="space-y-6">
-                <div className="space-y-4">
-                  <div className="p-4 border rounded-lg bg-blue-50 border-blue-200">
-                    <h4 className="font-medium mb-2 text-blue-900">🎯 What You've Accomplished</h4>
-                    <p className="text-sm text-blue-800 mb-3">
-                      In Step 2, you created the DeployHubPolicy and attached it to your role. 
-                      Now let's verify everything is set up correctly.
-                    </p>
-                    <div className="bg-white p-3 rounded border">
-                      <h5 className="font-medium text-green-700 mb-2">✅ Policy Created & Attached</h5>
-                      <p className="text-sm text-green-700">
-                        Your DeployHubPolicy should now be attached to your DeployHubRole in AWS.
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="p-4 border rounded-lg">
-                    <h4 className="font-medium mb-2">Trust Policy (For Reference)</h4>
-                    <p className="text-sm text-muted-foreground mb-3">
-                      This is the trust policy that was automatically configured when you created the role. 
-                      You don't need to do anything with this - it's just for your reference.
-                    </p>
-                    <div className="bg-muted p-3 rounded text-xs font-mono mb-3">
-                      {JSON.stringify(trustPolicy, null, 2)}
-                    </div>
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
-                      onClick={() => copyToClipboard(trustPolicy)}
-                      className="w-full"
-                      >
-                        <Copy className="h-4 w-4 mr-2" />
-                      Copy Trust Policy
-                      </Button>
-                  </div>
-
-                  <div className="p-4 border rounded-lg bg-green-50 border-green-200">
-                    <h4 className="font-medium mb-2 text-green-800">🚀 Ready for the Next Step!</h4>
-                    <p className="text-sm text-green-700 mb-3">
-                      Your AWS IAM role is now properly configured with the DeployHubPolicy. 
-                      The next step is to copy the Role ARN and complete the connection.
-                    </p>
-                    <div className="bg-white p-3 rounded border">
-                      <h5 className="font-medium text-blue-700 mb-2">📋 What to do next:</h5>
-                      <ol className="text-sm text-blue-700 space-y-1 ml-4">
-                        <li>1. Go back to your AWS IAM role creation</li>
-                        <li>2. Complete the role creation process</li>
-                        <li>3. Copy the Role ARN from the role details page</li>
-                        <li>4. Paste it in Step 4 of DeployHub</li>
-                    </ol>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Step 4: Enter ARN */}
-            {currentStep === 4 && (
+            {/* Step 6: Enter ARN */}
+            {currentStep === 6 && (
               <div className="space-y-6">
                 <div className="space-y-4">
                   <div>

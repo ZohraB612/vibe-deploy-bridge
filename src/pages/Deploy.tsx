@@ -602,13 +602,85 @@ export default function Deploy() {
           </p>
         </div>
 
-        <Alert>
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>
-            Make sure your main HTML file is named <code className="bg-muted px-1 rounded">index.html</code> 
-            or it's clearly identifiable in your uploaded files.
-          </AlertDescription>
-        </Alert>
+        {(() => {
+          const htmlFiles = projectConfig.files.filter(f => f.name.toLowerCase().endsWith('.html'));
+          const hasIndexHtml = htmlFiles.some(f => f.name.toLowerCase() === 'index.html');
+          const otherHtmlFiles = htmlFiles.filter(f => f.name.toLowerCase() !== 'index.html');
+          const hasPackageJson = projectConfig.files.some(f => f.name === 'package.json');
+          const hasStaticFiles = projectConfig.files.some(f => 
+            f.name.toLowerCase().endsWith('.html') || 
+            f.name.toLowerCase().endsWith('.css') || 
+            f.name.toLowerCase().endsWith('.js')
+          );
+          
+          // For framework projects (React, Vue, etc.) - HTML is generated during build
+          if (hasPackageJson) {
+            return (
+              <Alert className="border-blue-200 bg-blue-50">
+                <CheckCircle className="h-4 w-4 text-blue-600" />
+                <AlertDescription className="text-blue-800">
+                  ✅ Framework project detected - DeployHub will build and deploy your application automatically!
+                </AlertDescription>
+              </Alert>
+            );
+          }
+          
+          // For static sites - check for HTML files
+          if (hasStaticFiles) {
+            if (hasIndexHtml) {
+              return (
+                <Alert className="border-green-200 bg-green-50">
+                  <CheckCircle className="h-4 w-4 text-green-600" />
+                  <AlertDescription className="text-green-800">
+                    ✅ Found <code className="bg-green-100 px-1 rounded">index.html</code> - your static site is ready to deploy!
+                  </AlertDescription>
+                </Alert>
+              );
+            } else if (otherHtmlFiles.length > 0) {
+              return (
+                <Alert className="border-amber-200 bg-amber-50">
+                  <AlertCircle className="h-4 w-4 text-amber-600" />
+                  <AlertDescription className="text-amber-800">
+                    <div className="space-y-2">
+                      <p>Found HTML files but no <code className="bg-amber-100 px-1 rounded">index.html</code>:</p>
+                      <div className="space-y-1">
+                        {otherHtmlFiles.map(file => (
+                          <div key={file.name} className="flex items-center gap-2 text-sm">
+                            <code className="bg-amber-100 px-1 rounded">{file.name}</code>
+                            <span className="text-amber-700">will be renamed to index.html</span>
+                          </div>
+                        ))}
+                      </div>
+                      <p className="text-xs text-amber-700">
+                        DeployHub will automatically use your first HTML file as the entry point.
+                      </p>
+                    </div>
+                  </AlertDescription>
+                </Alert>
+              );
+            }
+          }
+          
+          // No recognizable project files
+          return (
+            <Alert className="border-yellow-200 bg-yellow-50">
+              <AlertCircle className="h-4 w-4 text-yellow-600" />
+              <AlertDescription className="text-yellow-800">
+                <div className="space-y-2">
+                  <p>No recognizable project files found.</p>
+                  <div className="text-sm space-y-1">
+                    <p>DeployHub supports:</p>
+                    <ul className="ml-4 space-y-1 text-xs">
+                      <li>• <strong>Framework projects:</strong> React, Vue, Angular, Next.js, etc. (with package.json)</li>
+                      <li>• <strong>Static sites:</strong> HTML, CSS, JS files</li>
+                      <li>• <strong>Backend projects:</strong> Node.js, Python, etc.</li>
+                    </ul>
+                  </div>
+                </div>
+              </AlertDescription>
+            </Alert>
+          );
+        })()}
 
         {connection && !connection.is_active && (
           <Alert variant="destructive">

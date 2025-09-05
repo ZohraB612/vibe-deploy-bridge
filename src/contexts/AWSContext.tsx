@@ -364,9 +364,7 @@ export function AWSProvider({ children }: AWSProviderProps) {
       );
       
       // Call backend API for deployment
-      const apiUrl = process.env.NODE_ENV === 'production' 
-        ? 'https://your-production-api.com' 
-        : 'http://localhost:3001';
+      const apiUrl = import.meta.env.VITE_DEPLOYHUB_API_URL || 'http://localhost:3001';
       
       addLog("Calling backend deployment API...");
       const response = await fetch(`${apiUrl}/deploy-s3-enhanced`, {
@@ -488,9 +486,7 @@ export function AWSProvider({ children }: AWSProviderProps) {
       );
       
       // Call backend API for deployment
-      const apiUrl = process.env.NODE_ENV === 'production' 
-        ? 'https://your-production-api.com' 
-        : 'http://localhost:3001';
+      const apiUrl = import.meta.env.VITE_DEPLOYHUB_API_URL || 'http://localhost:3001';
       
       addLog("Calling backend deployment API...");
       const response = await fetch(`${apiUrl}/deploy-s3-enhanced`, {
