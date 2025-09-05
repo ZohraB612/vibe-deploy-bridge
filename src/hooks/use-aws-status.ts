@@ -11,6 +11,7 @@ export function useAWSStatus() {
   const { connection } = useAWS();
 
   useEffect(() => {
+    // useAWSStatus useEffect - only runs when user or connection ID changes
     async function checkAWSConnection() {
       if (!user) {
         setHasAWSConnection(false);
@@ -38,8 +39,9 @@ export function useAWSStatus() {
           .limit(1);
 
         if (error) {
-          console.error('Error checking AWS connection status:', error);
-          setError(error.message);
+          console.warn('Supabase connection issue, continuing without AWS status check:', error);
+          setError(null);
+          // Default to false when Supabase is unavailable
           setHasAWSConnection(false);
         } else {
           // User has AWS connection if there's at least one connected connection
@@ -52,8 +54,8 @@ export function useAWSStatus() {
           setHasAWSConnection(hasConnection);
         }
       } catch (err) {
-        console.error('Error checking AWS connection status:', err);
-        setError(err instanceof Error ? err.message : 'Unknown error');
+        console.warn('Supabase connection issue, continuing without AWS status check:', err);
+        setError(null);
         setHasAWSConnection(false);
       } finally {
         setIsLoading(false);
@@ -61,7 +63,7 @@ export function useAWSStatus() {
     }
 
     checkAWSConnection();
-  }, [user, connection]);
+  }, [user?.id, connection?.id]); // Only depend on IDs, not entire objects
 
   return {
     hasAWSConnection,

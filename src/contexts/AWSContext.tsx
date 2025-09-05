@@ -369,7 +369,7 @@ export function AWSProvider({ children }: AWSProviderProps) {
         : 'http://localhost:3001';
       
       addLog("Calling backend deployment API...");
-      const response = await fetch(`${apiUrl}/deploy-s3`, {
+      const response = await fetch(`${apiUrl}/deploy-s3-enhanced`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -383,7 +383,8 @@ export function AWSProvider({ children }: AWSProviderProps) {
             secretAccessKey: credentials.secretAccessKey,
             sessionToken: credentials.sessionToken,
           },
-          region: connection?.region || 'us-east-1'
+          region: connection?.region || 'us-east-1',
+          enableBuild: true
         }),
       });
       
@@ -492,7 +493,7 @@ export function AWSProvider({ children }: AWSProviderProps) {
         : 'http://localhost:3001';
       
       addLog("Calling backend deployment API...");
-      const response = await fetch(`${apiUrl}/deploy-s3`, {
+      const response = await fetch(`${apiUrl}/deploy-s3-enhanced`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -506,7 +507,8 @@ export function AWSProvider({ children }: AWSProviderProps) {
             secretAccessKey: credentials.secretAccessKey,
             sessionToken: credentials.sessionToken,
           },
-          region: connection?.region || 'us-east-1'
+          region: connection?.region || 'us-east-1',
+          enableBuild: true
         }),
       });
       
@@ -997,7 +999,7 @@ export function AWSProvider({ children }: AWSProviderProps) {
             .maybeSingle();
           
           if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
-            console.warn('Error loading existing AWS connection:', error);
+            console.warn('Supabase connection issue, continuing without AWS connection:', error);
           } else if (existingConnection) {
             console.log('🔍 AWSContext: Loading existing connection:', existingConnection);
             setConnection(existingConnection);

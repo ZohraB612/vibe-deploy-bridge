@@ -341,20 +341,34 @@ export default function Deploy() {
   };
 
   const validateFiles = (files: File[]): string | null => {
-    const maxFileSize = 10 * 1024 * 1024; // 10MB
+    const maxFileSize = 50 * 1024 * 1024; // 50MB (increased for project files)
     const allowedTypes = [
       'text/html', 'text/css', 'application/javascript', 'text/javascript',
       'application/json', 'image/png', 'image/jpeg', 'image/gif', 'image/svg+xml',
-      'application/zip', 'text/plain'
+      'application/zip', 'text/plain', 'text/typescript', 'text/jsx', 'text/tsx',
+      'application/x-tar', 'application/gzip'
+    ];
+
+    // Extended file extensions for various project types
+    const allowedExtensions = [
+      'html', 'css', 'js', 'jsx', 'ts', 'tsx', 'json', 'png', 'jpg', 'jpeg', 'gif', 'svg', 'zip', 'txt',
+      'md', 'yml', 'yaml', 'toml', 'xml', 'scss', 'sass', 'less', 'styl', 'vue', 'svelte',
+      'py', 'rb', 'php', 'go', 'rs', 'java', 'c', 'cpp', 'h', 'hpp', 'cs', 'swift', 'kt',
+      'sh', 'bash', 'ps1', 'bat', 'cmd', 'dockerfile', 'dockerignore', 'gitignore',
+      'env', 'env.local', 'env.production', 'env.development', 'config', 'conf'
     ];
 
     for (const file of files) {
       if (file.size > maxFileSize) {
-        return `File "${file.name}" is too large. Maximum size is 10MB.`;
+        return `File "${file.name}" is too large. Maximum size is 50MB.`;
       }
       
-      if (!allowedTypes.includes(file.type) && !file.name.match(/\.(html|css|js|json|png|jpg|jpeg|gif|svg|zip|txt)$/i)) {
-        return `File "${file.name}" has an unsupported file type.`;
+      const fileExtension = file.name.split('.').pop()?.toLowerCase();
+      const isValidType = allowedTypes.includes(file.type) || 
+                         (fileExtension && allowedExtensions.includes(fileExtension));
+      
+      if (!isValidType) {
+        return `File "${file.name}" has an unsupported file type. Supported: ${allowedExtensions.slice(0, 10).join(', ')}...`;
       }
     }
 
@@ -408,7 +422,7 @@ export default function Deploy() {
           Upload Your Application
         </CardTitle>
         <CardDescription>
-          Upload your application files as a ZIP archive or select multiple files
+          Upload your project files - we support React, Vue, Angular, Next.js, and more! Upload as ZIP or individual files.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
@@ -429,13 +443,13 @@ export default function Deploy() {
               Drop your files here, or click to browse
             </p>
             <p className="text-sm text-muted-foreground">
-              Supports ZIP files, HTML, CSS, JS, and other web assets
+              Supports React, Vue, Angular, Next.js, Svelte, and static sites. Upload as ZIP or individual files.
             </p>
           </div>
           <input
             type="file"
             multiple
-            accept=".zip,.html,.css,.js,.json,.png,.jpg,.jpeg,.gif,.svg"
+            accept=".zip,.html,.css,.js,.jsx,.ts,.tsx,.json,.png,.jpg,.jpeg,.gif,.svg,.vue,.svelte,.md,.yml,.yaml,.toml,.xml,.scss,.sass,.less,.styl,.py,.rb,.php,.go,.rs,.java,.c,.cpp,.h,.hpp,.cs,.swift,.kt,.sh,.bash,.ps1,.bat,.cmd,.dockerfile,.gitignore,.env"
             onChange={handleFileChange}
             className="hidden"
             id="file-upload"
