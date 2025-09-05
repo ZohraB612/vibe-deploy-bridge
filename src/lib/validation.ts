@@ -139,7 +139,7 @@ export const validationRules = {
 };
 
 // Validation helper function
-export function validateField(value: any, rules: Array<(value: any) => true | string>): string | null {
+export function validateField(value: unknown, rules: Array<(value: unknown) => true | string>): string | null {
   for (const rule of rules) {
     const result = rule(value);
     if (result !== true) {
@@ -166,10 +166,10 @@ export const validationSchemas = {
 };
 
 // Real-time validation hook
-export function useFieldValidation<T extends Record<string, any>>(
+export function useFieldValidation<T extends Record<string, unknown>>(
   formData: T,
   fieldName: keyof T,
-  rules: Array<(value: any) => true | string>
+  rules: Array<(value: unknown) => true | string>
 ) {
   const [error, setError] = React.useState<string | null>(null);
   const [isValidating, setIsValidating] = React.useState(false);

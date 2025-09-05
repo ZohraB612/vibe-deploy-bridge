@@ -13,7 +13,7 @@ export interface AnalyticsMetric {
   value: number;
   unit: string;
   timestamp: Date;
-  metadata?: any;
+  metadata?: Record<string, unknown>;
 }
 
 export interface PerformanceData {

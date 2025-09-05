@@ -121,9 +121,13 @@ export function GitHubRepoConnect({ onRepoSelect, onCancel }: GitHubRepoConnectP
         setError("No repositories found. Make sure you have access to some repositories on GitHub.");
       }
       
-    } catch (error) {
-      console.error('Failed to fetch repositories:', error);
-      setError("Failed to connect to GitHub. Please check your internet connection and try again.");
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to connect repository';
+      toast({
+        title: "Connection Failed",
+        description: errorMessage,
+        variant: "destructive"
+      });
     } finally {
       setIsLoading(false);
     }
@@ -163,11 +167,12 @@ export function GitHubRepoConnect({ onRepoSelect, onCancel }: GitHubRepoConnectP
         description: "You'll be redirected to GitHub to authorize access",
       });
       
-    } catch (error: any) {
-      setError(`Failed to connect GitHub: ${error.message}`);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to connect GitHub';
+      setError(`Failed to connect GitHub: ${errorMessage}`);
       toast({
         title: "GitHub Connection Failed",
-        description: error.message,
+        description: errorMessage,
         variant: "destructive"
       });
     } finally {
@@ -192,11 +197,12 @@ export function GitHubRepoConnect({ onRepoSelect, onCancel }: GitHubRepoConnectP
           description: "To fully revoke access, please go to GitHub Settings → Applications → DeployHub → Revoke",
         });
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to disconnect GitHub';
       console.error('Failed to disconnect GitHub:', error);
       toast({
         title: "Disconnect Failed",
-        description: "Please try again or revoke access from GitHub directly",
+        description: errorMessage,
         variant: "destructive"
       });
     }

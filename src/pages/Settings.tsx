@@ -19,6 +19,7 @@ import {
   CheckCircle,
   Trash2
 } from "lucide-react";
+import { Project } from "@/contexts/ProjectContext";
 
 export default function Settings() {
   const { connection, disconnect } = useAWS();
@@ -29,7 +30,7 @@ export default function Settings() {
   console.log('Projects length:', projects.length);
   console.log('deleteProject function:', deleteProject);
   
-  const handleDeleteProject = async (project: any) => {
+  const handleDeleteProject = async (project: Project) => {
     console.log('Delete button clicked for project:', project);
     console.log('Project ID:', project.id);
     console.log('Project name:', project.name);

@@ -30,11 +30,12 @@ import { useToast } from "@/hooks/use-toast";
 import { LoadingSpinner } from "@/components/loading-spinner";
 import { DNSRecordDialog } from "@/components/dns-record-dialog";
 import { useNavigate } from "react-router-dom";
+import { Layout } from "@/components/Layout";
 
 export default function DomainManagement() {
-  const { domains, isLoading, error, addDomain, verifyDomain, deleteDomain, refreshDomains, provisionSSL, renewSSL, addDNSRecord, updateDNSRecord, deleteDNSRecord } = useDomains();
-  const { projects } = useProjects();
   const { toast } = useToast();
+  const { domains, isLoading, error, refreshDomains, addDomain, verifyDomain, renewSSL, deleteDomain, addDNSRecord, updateDNSRecord, deleteDNSRecord } = useDomains();
+  const { projects } = useProjects();
   const { hasAWSConnection, isLoading: isAWSLoading } = useAWSStatus();
   const navigate = useNavigate();
 
@@ -190,41 +191,35 @@ export default function DomainManagement() {
     }
   };
 
-  const getVerificationInstructions = (domain: any) => {
+  const getVerificationInstructions = (domain: Domain) => {
     switch (domain.verification_method) {
       case 'dns':
-        return (
-          <div className="space-y-2">
-            <p className="text-sm text-muted-foreground">Add this TXT record to your DNS:</p>
-            <div className="bg-muted p-2 rounded text-sm font-mono">
-              <div>Name: @</div>
-              <div>Type: TXT</div>
-              <div>Value: {domain.verification_token}</div>
-              <div>TTL: 3600</div>
-            </div>
-          </div>
-        );
+        return {
+          title: 'DNS Verification',
+          description: 'Add the following DNS records to your domain:',
+          records: domain.dns_records || []
+        };
       case 'file':
-        return (
-          <div className="space-y-2">
-            <p className="text-sm text-muted-foreground">Upload this file to your domain root:</p>
-            <div className="bg-muted p-2 rounded text-sm font-mono">
-              <div>File: /.well-known/deployhub-verification.txt</div>
-              <div>Content: {domain.verification_token}</div>
-            </div>
-          </div>
-        );
+        return {
+          title: 'File Verification',
+          description: 'Upload a verification file to your domain root:',
+          file: {
+            name: '.well-known/deployhub-verify.txt',
+            content: domain.verification_token || 'verification-token'
+          }
+        };
       case 'meta':
-        return (
-          <div className="space-y-2">
-            <p className="text-sm text-muted-foreground">Add this meta tag to your HTML head:</p>
-            <div className="bg-muted p-2 rounded text-sm font-mono">
-              {`<meta name="deployhub-verification" content="${domain.verification_token}" />`}
-            </div>
-          </div>
-        );
+        return {
+          title: 'Meta Tag Verification',
+          description: 'Add this meta tag to your website\'s <head> section:',
+          tag: `<meta name="deployhub-verification" content="${domain.verification_token || 'verification-token'}" />`
+        };
       default:
-        return null;
+        return {
+          title: 'Verification Required',
+          description: 'Please select a verification method.',
+          records: []
+        };
     }
   };
 
@@ -293,7 +288,7 @@ export default function DomainManagement() {
                 </div>
                 <div>
                   <Label htmlFor="verification">Verification Method</Label>
-                  <Select value={verificationMethod} onValueChange={(value: any) => setVerificationMethod(value)}>
+                  <Select value={verificationMethod} onValueChange={(value: 'dns' | 'file') => setVerificationMethod(value)}>
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>

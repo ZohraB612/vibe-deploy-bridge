@@ -22,15 +22,20 @@ import {
   Star,
   User,
   LogOut,
-  Settings
+  Settings,
+  Loader2
 } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 import { useAuth } from "@/contexts/AuthContext";
 import { useAWSStatus } from "@/hooks/use-aws-status";
+import { useProjects } from "@/contexts/ProjectContext";
 import { AuthDialog } from "@/components/auth/AuthDialog";
 import { useState } from "react";
 import heroImage from "@/assets/hero-deployment.jpg";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 
 const features = [
   {
@@ -92,7 +97,72 @@ const testimonials = [
 export default function Index() {
   const { isAuthenticated, user, signOut } = useAuth();
   const { hasAWSConnection, isLoading: isAWSLoading } = useAWSStatus();
+      const { addProject } = useProjects();
   const [showAuth, setShowAuth] = useState(false);
+  
+  const [projectName, setProjectName] = useState('');
+  const [projectDescription, setProjectDescription] = useState('');
+  const [isCreating, setIsCreating] = useState(false);
+  const [createProgress, setCreateProgress] = useState(0);
+  const [createMessage, setCreateMessage] = useState('');
+
+  const navigate = useNavigate();
+
+  const handleCreateProject = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!projectName.trim()) return;
+
+    setIsCreating(true);
+    setCreateProgress(0);
+    setCreateMessage('Creating project...');
+
+    try {
+      // Simulate progress for better UX
+      setCreateProgress(25);
+      setCreateMessage('Setting up project structure...');
+      
+      setCreateProgress(50);
+      setCreateMessage('Creating project in database...');
+      
+      const newProject = await addProject({
+        name: projectName.trim(),
+        description: projectDescription.trim() || 'A new DeployHub project',
+        domain: '',
+        status: 'stopped',
+        framework: 'static',
+        branch: 'main'
+      });
+
+      if (!newProject) {
+        throw new Error('Failed to create project');
+      }
+
+      setCreateProgress(75);
+      setCreateMessage('Project created successfully!');
+
+      // Reset form
+      setProjectName('');
+      setProjectDescription('');
+      
+      setCreateProgress(100);
+      setCreateMessage('Redirecting to project...');
+
+      // Redirect to the new project
+      setTimeout(() => {
+        navigate(`/project/${newProject.id}`);
+      }, 1000);
+
+    } catch (error) {
+      setCreateMessage('Failed to create project. Please try again.');
+      console.error('Error creating project:', error);
+    } finally {
+      setTimeout(() => {
+        setIsCreating(false);
+        setCreateProgress(0);
+        setCreateMessage('');
+      }, 2000);
+    }
+  };
   
   return (
     <div className="min-h-screen">
@@ -122,17 +192,17 @@ export default function Index() {
                     <DropdownMenuTrigger asChild>
                       <Button variant="ghost" className="relative h-8 w-8 rounded-full">
                         <Avatar className="h-8 w-8">
-                          <AvatarImage src={user?.avatar_url} alt={user?.name || user?.email} />
-                          <AvatarFallback>
-                            {user?.name ? user.name.charAt(0).toUpperCase() : user?.email?.charAt(0).toUpperCase()}
-                          </AvatarFallback>
+                                                  <AvatarImage src={user?.profile?.avatar_url} alt={user?.profile?.name || user?.email} />
+                        <AvatarFallback>
+                          {user?.profile?.name ? user.profile.name.charAt(0).toUpperCase() : user?.email?.charAt(0).toUpperCase()}
+                        </AvatarFallback>
                         </Avatar>
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent className="w-56" align="end" forceMount>
                       <DropdownMenuLabel className="font-normal">
                         <div className="flex flex-col space-y-1">
-                          <p className="text-sm font-medium leading-none">{user?.name || 'User'}</p>
+                                                      <p className="text-sm font-medium leading-none">{user?.profile?.name || 'User'}</p>
                           <p className="text-xs leading-none text-muted-foreground">{user?.email}</p>
                         </div>
                       </DropdownMenuLabel>
@@ -384,6 +454,65 @@ export default function Index() {
           </div>
         </div>
       </section>
+
+      {/* Project Creation Form for Authenticated Users */}
+      {isAuthenticated && hasAWSConnection && (
+        <div className="mt-8 p-6 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+          <h3 className="text-lg font-semibold mb-4">Create New Project</h3>
+          <form onSubmit={handleCreateProject} className="space-y-4">
+            <div>
+              <Label htmlFor="projectName">Project Name</Label>
+              <Input
+                id="projectName"
+                value={projectName}
+                onChange={(e) => setProjectName(e.target.value)}
+                placeholder="Enter project name"
+                disabled={isCreating}
+                required
+              />
+            </div>
+            <div>
+              <Label htmlFor="projectDescription">Description (Optional)</Label>
+              <Textarea
+                id="projectDescription"
+                value={projectDescription}
+                onChange={(e) => setProjectDescription(e.target.value)}
+                placeholder="Describe your project"
+                disabled={isCreating}
+                rows={3}
+              />
+            </div>
+            
+            {/* Progress Indicator */}
+            {isCreating && (
+              <div className="space-y-2">
+                <div className="w-full bg-gray-200 rounded-full h-2">
+                  <div 
+                    className="bg-blue-600 h-2 rounded-full transition-all duration-300 ease-out"
+                    style={{ width: `${createProgress}%` }}
+                  />
+                </div>
+                <p className="text-sm text-gray-600 dark:text-gray-400">{createMessage}</p>
+              </div>
+            )}
+            
+            <Button 
+              type="submit" 
+              disabled={isCreating || !projectName.trim()}
+              className="w-full"
+            >
+              {isCreating ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Creating Project...
+                </>
+              ) : (
+                'Create Project'
+              )}
+            </Button>
+          </form>
+        </div>
+      )}
 
       {/* Footer */}
       <footer className="border-t bg-card/50">

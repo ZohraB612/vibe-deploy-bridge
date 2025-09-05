@@ -5,29 +5,22 @@ import type { DeploymentLogInsert } from "@/lib/database.types";
 
 export interface LogEntry {
   id: string;
-  deploymentId: string;
-  projectId: string;
-  timestamp: Date;
-  level: 'debug' | 'info' | 'warn' | 'error' | 'success';
+  deployment_id: string;
+  project_id: string;
+  level: 'info' | 'warn' | 'error' | 'debug';
   message: string;
   source: string;
-  metadata?: any;
+  timestamp: string;
+  metadata?: Record<string, unknown>;
 }
 
-export interface DeploymentLogsContextType {
+interface DeploymentLogsContextType {
   logs: LogEntry[];
   isLoading: boolean;
-  isStreaming: boolean;
   error: string | null;
-  
-  // Methods
+  addLog: (deploymentId: string, projectId: string, level: LogEntry['level'], message: string, source: string, metadata?: Record<string, unknown>) => Promise<void>;
   fetchLogs: (deploymentId: string) => Promise<void>;
-  addLog: (deploymentId: string, projectId: string, level: LogEntry['level'], message: string, source: string, metadata?: any) => Promise<void>;
-  startLogStreaming: (deploymentId: string) => void;
-  stopLogStreaming: () => void;
-  clearLogs: () => void;
-  searchLogs: (query: string) => LogEntry[];
-  filterLogs: (level: LogEntry['level'] | 'all') => LogEntry[];
+  clearLogs: (deploymentId: string) => Promise<void>;
 }
 
 const DeploymentLogsContext = createContext<DeploymentLogsContextType | undefined>(undefined);
@@ -54,16 +47,27 @@ export function DeploymentLogsProvider({ children }: DeploymentLogsProviderProps
   const [streamingInterval, setStreamingInterval] = useState<NodeJS.Timeout | null>(null);
   const [currentDeploymentId, setCurrentDeploymentId] = useState<string | null>(null);
 
-  const transformLog = (dbLog: any): LogEntry => ({
+  const transformLog = (dbLog: DatabaseLogEntry): LogEntry => ({
     id: dbLog.id,
-    deploymentId: dbLog.deployment_id,
-    projectId: dbLog.project_id,
-    timestamp: new Date(dbLog.timestamp),
+    deployment_id: dbLog.deployment_id,
+    project_id: dbLog.project_id,
     level: dbLog.log_level,
     message: dbLog.message,
     source: dbLog.source || 'system',
+    timestamp: dbLog.timestamp,
     metadata: dbLog.metadata
   });
+
+interface DatabaseLogEntry {
+  id: string;
+  deployment_id: string;
+  project_id: string;
+  log_level: LogEntry['level'];
+  message: string;
+  source?: string;
+  timestamp: string;
+  metadata?: Record<string, unknown>;
+}
 
   const fetchLogs = useCallback(async (deploymentId: string) => {
     if (!user) return;
@@ -99,7 +103,7 @@ export function DeploymentLogsProvider({ children }: DeploymentLogsProviderProps
     level: LogEntry['level'],
     message: string,
     source: string,
-    metadata?: any
+    metadata?: Record<string, unknown>
   ) => {
     if (!user) return;
 

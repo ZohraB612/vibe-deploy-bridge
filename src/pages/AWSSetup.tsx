@@ -201,19 +201,18 @@ export default function AWSSetup() {
     }
 
     // Validate role format first
-    const validation = await validateRole(roleArn);
-    if (!validation.valid) {
-      toast({
-        title: "Invalid Role ARN",
-        description: validation.error || "Please check your role ARN format",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    // Call the new secure backend to verify and store the connection
     try {
-      // Note: isConnecting state is managed by the AWS context
+      const validation = await validateRole(roleArn);
+      if (!validation.valid) {
+        toast({
+          title: "Invalid Role ARN",
+          description: validation.error || "Please check your role ARN format",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      // Call the new secure backend to verify and store the connection
       
       const apiUrl = import.meta.env.VITE_DEPLOYHUB_API_URL || 'https://your-api-gateway-url.execute-api.us-east-1.amazonaws.com/prod';
       
@@ -257,10 +256,11 @@ export default function AWSSetup() {
         throw new Error("Verification failed");
       }
       
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to validate role';
       toast({
         title: "Connection Failed",
-        description: error.message || "Failed to verify AWS role connection. Please check your role configuration.",
+        description: errorMessage || "Failed to verify AWS role connection. Please check your role configuration.",
         variant: "destructive"
       });
     }

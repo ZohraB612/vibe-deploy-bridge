@@ -1,7 +1,7 @@
 import { STSClient, AssumeRoleCommand, GetCallerIdentityCommand } from "@aws-sdk/client-sts";
 
 // AWS Lambda handler for AWS account connection verification
-export const handler = async (event: any) => {
+export async function connectAWSAccount(event: { httpMethod: string; body?: string }): Promise<{ statusCode: number; headers: Record<string, string>; body: string }> {
   // CORS headers for web requests
   const headers = {
     'Access-Control-Allow-Origin': '*',
@@ -120,25 +120,27 @@ export const handler = async (event: any) => {
         })
       };
 
-    } catch (assumeError: any) {
+    } catch (assumeError: unknown) {
       console.error('Role assumption verification failed:', assumeError);
       
       // Provide helpful error messages based on the type of failure
       let errorMessage = 'Failed to verify AWS role connection';
       let statusCode = 400;
 
-      if (assumeError.name === 'AccessDenied') {
-        errorMessage = 'Access denied. Please check that your IAM role trust policy allows DeployHub to assume it.';
-        statusCode = 403;
-      } else if (assumeError.name === 'InvalidParameterValue') {
-        errorMessage = 'Invalid role ARN or external ID provided.';
-        statusCode = 400;
-      } else if (assumeError.message.includes('ExternalId')) {
-        errorMessage = 'External ID mismatch. Please check your role configuration.';
-        statusCode = 400;
-      } else if (assumeError.message.includes('does not exist')) {
-        errorMessage = 'The specified IAM role does not exist.';
-        statusCode = 404;
+      if (assumeError instanceof Error) {
+        if (assumeError.name === 'AccessDenied') {
+          errorMessage = 'Access denied. Please check that your IAM role trust policy allows DeployHub to assume it.';
+          statusCode = 403;
+        } else if (assumeError.name === 'InvalidParameterValue') {
+          errorMessage = 'Invalid role ARN or external ID provided.';
+          statusCode = 400;
+        } else if (assumeError.message.includes('ExternalId')) {
+          errorMessage = 'External ID mismatch. Please check your role configuration.';
+          statusCode = 400;
+        } else if (assumeError.message.includes('does not exist')) {
+          errorMessage = 'The specified IAM role does not exist.';
+          statusCode = 404;
+        }
       }
 
       return {
@@ -146,13 +148,13 @@ export const handler = async (event: any) => {
         headers,
         body: JSON.stringify({
           error: errorMessage,
-          details: assumeError.message,
+          details: assumeError instanceof Error ? assumeError.message : 'Unknown error',
           suggestion: 'Please verify your IAM role trust policy includes DeployHub as a trusted entity.'
         })
       };
     }
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('AWS account connection failed:', error);
     
     return {
@@ -160,7 +162,7 @@ export const handler = async (event: any) => {
       headers,
       body: JSON.stringify({
         error: 'Internal server error during AWS account verification',
-        details: error.message
+        details: error instanceof Error ? error.message : 'Unknown error'
       })
     };
   }

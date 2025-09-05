@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useEffect, ReactNode, useCallback 
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "./AuthContext";
 import type { ProjectEnvironmentVariableInsert, ProjectEnvironmentVariableUpdate } from "@/lib/database.types";
+import type { ProjectEnvironmentVariable } from "@/lib/database.types";
 
 export interface EnvironmentVariable {
   id: string;
@@ -128,7 +129,7 @@ export function EnvironmentProvider({ children }: EnvironmentProviderProps) {
     setTemplates(commonTemplates);
   }, []);
 
-  const transformVariable = (dbVar: any): EnvironmentVariable => ({
+  const transformVariable = (dbVar: ProjectEnvironmentVariable): EnvironmentVariable => ({
     id: dbVar.id,
     projectId: dbVar.project_id,
     keyName: dbVar.key_name,
@@ -393,12 +394,13 @@ export function EnvironmentProvider({ children }: EnvironmentProviderProps) {
           `${v.keyName}=${v.isSecret ? '[REDACTED]' : v.value}`
         ).join('\n');
       
-      case 'json':
+      case 'json': {
         const jsonObj = envVars.reduce((acc, v) => ({
           ...acc,
           [v.keyName]: v.isSecret ? '[REDACTED]' : v.value
         }), {});
         return JSON.stringify(jsonObj, null, 2);
+      }
       
       case 'yaml':
         return envVars.map(v => 

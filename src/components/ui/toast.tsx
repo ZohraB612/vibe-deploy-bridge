@@ -1,7 +1,7 @@
 import * as React from "react"
 import * as ToastPrimitives from "@radix-ui/react-toast"
 import { cva, type VariantProps } from "class-variance-authority"
-import { X, CheckCircle, AlertCircle, Info, AlertTriangle } from "lucide-react"
+import { X } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 
@@ -23,16 +23,16 @@ const ToastViewport = React.forwardRef<
 ToastViewport.displayName = ToastPrimitives.Viewport.displayName
 
 const toastVariants = cva(
-  "group pointer-events-auto relative flex w-full items-center justify-between space-x-4 overflow-hidden rounded-md border p-6 pr-8 shadow-lg transition-all data-[swipe=cancel]:translate-x-0 data-[swipe=end]:translate-x-[var(--radix-toast-swipe-end-x)] data-[swipe=move]:translate-x-[var(--radix-toast-swipe-move-x)] data-[swipe=move]:transition-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[swipe=end]:animate-out data-[state=closed]:fade-out-80 data-[state=closed]:slide-out-to-right-full data-[state=open]:slide-in-from-top-full data-[state=open]:sm:slide-in-from-bottom-full",
+  "group pointer-events-auto relative flex w-full items-center justify-between space-x-4 overflow-hidden rounded-md border p-6 pr-8 shadow-lg transition-all duration-300 ease-out data-[swipe=cancel]:translate-x-0 data-[swipe=end]:translate-x-[var(--radix-toast-swipe-end-x)] data-[swipe=move]:translate-x-[var(--radix-toast-swipe-move-x)] data-[swipe=move]:transition-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[swipe=end]:animate-out data-[state=closed]:fade-out-80 data-[state=closed]:slide-out-to-right-full data-[state=open]:slide-in-from-top-full data-[state=open]:sm:slide-in-from-bottom-full hover:scale-105",
   {
     variants: {
       variant: {
-        default: "border bg-background text-foreground",
+        default: "border bg-background text-foreground shadow-lg hover:shadow-xl",
         destructive:
-          "destructive border-destructive bg-destructive text-destructive-foreground",
-        success: "border-green-200 bg-green-50 text-green-800",
-        warning: "border-yellow-200 bg-yellow-50 text-yellow-800",
-        info: "border-blue-200 bg-blue-50 text-blue-800",
+          "destructive border-destructive bg-destructive text-destructive-foreground shadow-lg hover:shadow-xl",
+        success: "border-green-200 bg-green-50 text-green-800 shadow-lg hover:shadow-xl",
+        warning: "border-yellow-200 bg-yellow-50 text-yellow-800 shadow-lg hover:shadow-xl",
+        info: "border-blue-200 bg-blue-50 text-blue-800 shadow-lg hover:shadow-xl",
       },
     },
     defaultVariants: {
@@ -78,7 +78,7 @@ const ToastClose = React.forwardRef<
   <ToastPrimitives.Close
     ref={ref}
     className={cn(
-      "absolute right-2 top-2 rounded-md p-1 text-foreground/50 opacity-0 transition-opacity hover:text-foreground focus:opacity-100 focus:outline-none focus:ring-2 group-hover:opacity-100 group-[.destructive]:text-red-300 group-[.destructive]:hover:text-red-50 group-[.destructive]:focus:ring-red-400 group-[.destructive]:focus:ring-offset-red-600",
+      "absolute right-2 top-2 rounded-md p-1 text-foreground/50 opacity-0 transition-all duration-200 hover:text-foreground focus:opacity-100 focus:outline-none focus:ring-2 group-hover:opacity-100 group-[.destructive]:text-red-300 group-[.destructive]:hover:text-red-50 group-[.destructive]:focus:ring-red-400 group-[.destructive]:focus:ring-offset-red-600",
       className
     )}
     toast-close=""
@@ -117,57 +117,12 @@ type ToastProps = React.ComponentPropsWithoutRef<typeof Toast>
 
 type ToastActionElement = React.ReactElement<typeof ToastAction>
 
-// Enhanced toast component with icons
-const ToastWithIcon = React.forwardRef<
-  React.ElementRef<typeof Toast>,
-  ToastProps & { 
-    icon?: 'success' | 'error' | 'warning' | 'info' | 'default';
-    showIcon?: boolean;
-  }
->(({ className, variant, icon, showIcon = true, children, ...props }, ref) => {
-  const getIcon = () => {
-    if (!showIcon) return null;
-    
-    const iconType = icon || variant;
-    const iconClasses = "h-5 w-5 mr-3 flex-shrink-0";
-    
-    switch (iconType) {
-      case 'success':
-        return <CheckCircle className={`${iconClasses} text-green-600`} />;
-      case 'destructive':
-        return <AlertCircle className={`${iconClasses} text-red-600`} />;
-      case 'warning':
-        return <AlertTriangle className={`${iconClasses} text-yellow-600`} />;
-      case 'info':
-        return <Info className={`${iconClasses} text-blue-600`} />;
-      default:
-        return null;
-    }
-  };
-
-  return (
-    <Toast
-      ref={ref}
-      className={cn("flex items-start", className)}
-      variant={variant}
-      {...props}
-    >
-      {getIcon()}
-      <div className="flex-1">
-        {children}
-      </div>
-    </Toast>
-  );
-});
-ToastWithIcon.displayName = "ToastWithIcon";
-
 export {
   type ToastProps,
   type ToastActionElement,
   ToastProvider,
   ToastViewport,
   Toast,
-  ToastWithIcon,
   ToastTitle,
   ToastDescription,
   ToastClose,

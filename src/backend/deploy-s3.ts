@@ -17,7 +17,7 @@ import * as unzipper from 'unzipper';
 import { Readable } from 'stream';
 
 // AWS Lambda handler for S3 deployment
-export const handler = async (event: any) => {
+export async function deployToS3(event: { httpMethod: string; body?: string }): Promise<{ statusCode: number; headers: Record<string, string>; body: string }> {
   // CORS headers for web requests
   const headers = {
     'Access-Control-Allow-Origin': '*',
@@ -321,15 +321,17 @@ export const handler = async (event: any) => {
       })
     };
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('S3 deployment failed:', error);
+    
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred during deployment';
     
     return {
       statusCode: 500,
       headers,
       body: JSON.stringify({
         success: false,
-        error: error.message || 'Unknown error occurred during deployment'
+        error: errorMessage
       })
     };
   }

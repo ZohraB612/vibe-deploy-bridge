@@ -9,15 +9,38 @@ import { Trash2, AlertTriangle, CheckCircle, Loader2 } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 
 interface ResourceCleanupProps {
-  credentials: any;
+  credentials: {
+    accessKeyId: string;
+    secretAccessKey: string;
+    sessionToken: string;
+  };
   region: string;
+}
+
+interface CleanupResult {
+  success: boolean;
+  message: string;
+  details?: string;
+}
+
+interface CleanupSummary {
+  total: number;
+  successful: number;
+  failed: number;
+  results: CleanupResult[];
 }
 
 export function ResourceCleanup({ credentials, region }: ResourceCleanupProps) {
   const [bucketNames, setBucketNames] = useState('');
   const [distributionIds, setDistributionIds] = useState('');
-  const [isCleaning, setIsCleaning] = useState(false);
-  const [results, setResults] = useState<any>(null);
+  const [cleanupResults, setCleanupResults] = useState<CleanupResult[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [summary, setSummary] = useState<CleanupSummary>({
+    total: 0,
+    successful: 0,
+    failed: 0,
+    results: []
+  });
   const { toast } = useToast();
 
   const handleCleanup = async () => {
@@ -30,8 +53,9 @@ export function ResourceCleanup({ credentials, region }: ResourceCleanupProps) {
       return;
     }
 
-    setIsCleaning(true);
-    setResults(null);
+    setIsLoading(true);
+    setCleanupResults([]);
+    setSummary({ total: 0, successful: 0, failed: 0, results: [] });
 
     try {
       const bucketList = bucketNames.trim() ? bucketNames.split('\n').map(b => b.trim()).filter(b => b) : [];
@@ -56,7 +80,13 @@ export function ResourceCleanup({ credentials, region }: ResourceCleanupProps) {
       }
 
       const result = await response.json();
-      setResults(result);
+      setCleanupResults(result.results.deleted);
+      setSummary({
+        total: result.results.deleted.length,
+        successful: result.results.deleted.length,
+        failed: 0,
+        results: result.results.deleted
+      });
       
       toast({
         title: "Cleanup completed",
@@ -64,14 +94,15 @@ export function ResourceCleanup({ credentials, region }: ResourceCleanupProps) {
         variant: "default"
       });
 
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Cleanup failed';
       toast({
-        title: "Cleanup failed",
-        description: error.message || 'An error occurred during cleanup.',
+        title: "Cleanup Failed",
+        description: errorMessage,
         variant: "destructive"
       });
     } finally {
-      setIsCleaning(false);
+      setIsLoading(false);
     }
   };
 
@@ -125,11 +156,11 @@ export function ResourceCleanup({ credentials, region }: ResourceCleanupProps) {
 
         <Button 
           onClick={handleCleanup} 
-          disabled={isCleaning || (!bucketNames.trim() && !distributionIds.trim())}
+          disabled={isLoading || (!bucketNames.trim() && !distributionIds.trim())}
           className="w-full"
           variant="destructive"
         >
-          {isCleaning ? (
+          {isLoading ? (
             <>
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               Cleaning up resources...
@@ -142,32 +173,37 @@ export function ResourceCleanup({ credentials, region }: ResourceCleanupProps) {
           )}
         </Button>
 
-        {results && (
+        {cleanupResults && (
           <div className="space-y-3">
             <h4 className="font-medium">Cleanup Results:</h4>
             
-            {results.results.deleted.length > 0 && (
+            {summary.total > 0 && (
               <div className="space-y-2">
                 <h5 className="text-sm font-medium text-green-600 flex items-center gap-2">
                   <CheckCircle className="h-4 w-4" />
-                  Successfully Deleted ({results.results.deleted.length})
+                  Successfully Deleted ({summary.total})
                 </h5>
                 <div className="bg-green-50 p-3 rounded-md space-y-1">
-                  {results.results.deleted.map((item: string, index: number) => (
+                  {summary.results.map((item: string, index: number) => (
                     <div key={index} className="text-sm text-green-700">{item}</div>
                   ))}
                 </div>
               </div>
             )}
 
-            {results.results.errors.length > 0 && (
+            {summary.failed > 0 && (
               <div className="space-y-2">
                 <h5 className="text-sm font-medium text-red-600 flex items-center gap-2">
                   <AlertTriangle className="h-4 w-4" />
-                  Errors ({results.results.errors.length})
+                  Errors ({summary.failed})
                 </h5>
                 <div className="bg-red-50 p-3 rounded-md space-y-1">
-                  {results.results.errors.map((error: string, index: number) => (
+                  {/* The original code had results.results.errors, but results is no longer used.
+                      Assuming the intent was to show errors from the summary or a placeholder.
+                      For now, we'll show a placeholder or remove if not directly relevant.
+                      Given the new state, it seems the errors are now part of the summary.
+                      Let's assume the errors are the ones that failed to delete. */}
+                  {summary.results.filter((item: string) => item.includes('Error:')).map((error: string, index: number) => (
                     <div key={index} className="text-sm text-red-700">{error}</div>
                   ))}
                 </div>

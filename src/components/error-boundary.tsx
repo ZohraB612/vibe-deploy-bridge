@@ -1,8 +1,6 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { AlertTriangle, RefreshCw, Home, ArrowLeft } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { AlertTriangle, RefreshCw, Home } from 'lucide-react';
 
 interface Props {
   children: ReactNode;
@@ -15,8 +13,8 @@ interface State {
   errorInfo?: ErrorInfo;
 }
 
-class ErrorBoundaryClass extends Component<Props & { navigate: (path: string) => void }, State> {
-  constructor(props: Props & { navigate: (path: string) => void }) {
+export class ErrorBoundary extends Component<Props, State> {
+  constructor(props: Props) {
     super(props);
     this.state = { hasError: false };
   }
@@ -28,12 +26,6 @@ class ErrorBoundaryClass extends Component<Props & { navigate: (path: string) =>
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error('ErrorBoundary caught an error:', error, errorInfo);
     this.setState({ error, errorInfo });
-    
-    // Log error to external service in production
-    if (process.env.NODE_ENV === 'production') {
-      // You could send this to Sentry, LogRocket, etc.
-      console.error('Production error:', { error: error.message, stack: error.stack, errorInfo });
-    }
   }
 
   handleRetry = () => {
@@ -41,13 +33,7 @@ class ErrorBoundaryClass extends Component<Props & { navigate: (path: string) =>
   };
 
   handleGoHome = () => {
-    this.props.navigate('/');
-    this.handleRetry();
-  };
-
-  handleGoBack = () => {
-    window.history.back();
-    this.handleRetry();
+    window.location.href = '/';
   };
 
   render() {
@@ -57,73 +43,61 @@ class ErrorBoundaryClass extends Component<Props & { navigate: (path: string) =>
       }
 
       return (
-        <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-subtle">
-          <Card className="w-full max-w-md text-center">
-            <CardHeader>
-              <div className="flex justify-center mb-4">
-                <div className="rounded-full bg-red-100 p-4">
-                  <AlertTriangle className="h-12 w-12 text-red-600" />
-                </div>
-              </div>
-              <CardTitle className="text-2xl font-bold text-red-600">
+        <div className="min-h-screen flex items-center justify-center bg-background p-4">
+          <div className="max-w-md w-full text-center space-y-6">
+            <div className="mx-auto w-16 h-16 bg-destructive/10 rounded-full flex items-center justify-center">
+              <AlertTriangle className="w-8 h-8 text-destructive" />
+            </div>
+            
+            <div className="space-y-2">
+              <h1 className="text-2xl font-bold text-foreground">
                 Something went wrong
-              </CardTitle>
-              <CardDescription>
+              </h1>
+              <p className="text-muted-foreground">
                 We encountered an unexpected error. Don't worry, your data is safe.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {process.env.NODE_ENV === 'development' && this.state.error && (
-                <div className="text-left">
-                  <details className="bg-muted p-3 rounded text-sm">
-                    <summary className="cursor-pointer font-medium mb-2">
-                      Error Details (Development)
-                    </summary>
-                    <div className="space-y-2 text-xs font-mono">
-                      <p><strong>Message:</strong> {this.state.error.message}</p>
-                      <p><strong>Stack:</strong></p>
-                      <pre className="whitespace-pre-wrap text-xs bg-background p-2 rounded">
-                        {this.state.error.stack}
+              </p>
+            </div>
+
+            {process.env.NODE_ENV === 'development' && this.state.error && (
+              <details className="text-left">
+                <summary className="cursor-pointer text-sm text-muted-foreground hover:text-foreground">
+                  Error details (development only)
+                </summary>
+                <div className="mt-2 p-3 bg-muted rounded text-xs font-mono text-muted-foreground overflow-auto">
+                  <div className="mb-2">
+                    <strong>Error:</strong> {this.state.error.toString()}
+                  </div>
+                  {this.state.errorInfo && (
+                    <div>
+                      <strong>Stack trace:</strong>
+                      <pre className="whitespace-pre-wrap mt-1">
+                        {this.state.errorInfo.componentStack}
                       </pre>
                     </div>
-                  </details>
+                  )}
                 </div>
-              )}
-              
-              <div className="space-y-2">
-                <Button onClick={this.handleRetry} className="w-full">
-                  <RefreshCw className="h-4 w-4 mr-2" />
-                  Try Again
-                </Button>
-                <Button variant="outline" onClick={this.handleGoBack} className="w-full">
-                  <ArrowLeft className="h-4 w-4 mr-2" />
-                  Go Back
-                </Button>
-                <Button variant="outline" onClick={this.handleGoHome} className="w-full">
-                  <Home className="h-4 w-4 mr-2" />
-                  Go Home
-                </Button>
-              </div>
-              
-              <p className="text-xs text-muted-foreground">
-                If this problem persists, please contact support with the error details above.
-              </p>
-            </CardContent>
-          </Card>
+              </details>
+            )}
+
+            <div className="flex flex-col sm:flex-row gap-3 justify-center">
+              <Button onClick={this.handleRetry} className="flex-1 sm:flex-none">
+                <RefreshCw className="w-4 h-4 mr-2" />
+                Try Again
+              </Button>
+              <Button 
+                variant="outline" 
+                onClick={this.handleGoHome}
+                className="flex-1 sm:flex-none"
+              >
+                <Home className="w-4 h-4 mr-2" />
+                Go Home
+              </Button>
+            </div>
+          </div>
         </div>
       );
     }
 
     return this.props.children;
   }
-}
-
-// Wrapper component to provide navigation function
-export function ErrorBoundary({ children, fallback }: Props) {
-  const navigate = useNavigate();
-  return (
-    <ErrorBoundaryClass navigate={navigate} fallback={fallback}>
-      {children}
-    </ErrorBoundaryClass>
-  );
 }

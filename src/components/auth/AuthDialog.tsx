@@ -62,10 +62,11 @@ export function AuthDialog({ open, onOpenChange, defaultMode = "signin" }: AuthD
           description: `Signing in with ${oauthProviders[provider].name}`,
         });
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : "An unexpected error occurred";
       toast({
         title: "Authentication failed",
-        description: err.message || "An unexpected error occurred",
+        description: errorMessage,
         variant: "destructive"
       });
     } finally {
@@ -113,10 +114,11 @@ export function AuthDialog({ open, onOpenChange, defaultMode = "signin" }: AuthD
         setFormData({ name: "", email: "", password: "", confirmPassword: "" });
         setTimeout(() => redirectAfterAuth(), 100);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : "An unexpected error occurred";
       toast({
         title: "Sign in failed",
-        description: err.message || "An unexpected error occurred",
+        description: errorMessage,
         variant: "destructive"
       });
     } finally {
@@ -182,10 +184,11 @@ export function AuthDialog({ open, onOpenChange, defaultMode = "signin" }: AuthD
         onOpenChange(false);
         setFormData({ name: "", email: "", password: "", confirmPassword: "" });
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : "An unexpected error occurred";
       toast({
         title: "Sign up failed",
-        description: err.message || "An unexpected error occurred",
+        description: errorMessage,
         variant: "destructive"
       });
     } finally {
@@ -222,10 +225,11 @@ export function AuthDialog({ open, onOpenChange, defaultMode = "signin" }: AuthD
         });
         setMode("signin");
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : "An unexpected error occurred";
       toast({
         title: "Reset failed",
-        description: err.message || "An unexpected error occurred",
+        description: errorMessage,
         variant: "destructive"
       });
     } finally {

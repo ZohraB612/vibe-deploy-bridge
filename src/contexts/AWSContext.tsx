@@ -76,6 +76,17 @@ export interface StackEvent {
   resourceStatusReason?: string;
 }
 
+// Add proper types for DNS records
+interface DNSRecord {
+  id?: string;
+  name: string;
+  type: 'A' | 'AAAA' | 'CNAME' | 'MX' | 'TXT' | 'NS';
+  value: string;
+  ttl?: number;
+  priority?: number; // For MX records
+  status?: 'pending' | 'active' | 'error';
+}
+
 interface AWSContextType {
   connection: AWSConnection | null;
   credentials: AWSCredentials | null;
@@ -95,7 +106,7 @@ interface AWSContextType {
   
   // Domain operations
   provisionSSL: (domainName: string, hostedZoneId?: string) => Promise<boolean>;
-  updateDNS: (domainName: string, hostedZoneId: string, records: any[]) => Promise<boolean>;
+  updateDNS: (domainName: string, hostedZoneId: string, records: DNSRecord[]) => Promise<boolean>;
   findHostedZone: (domainName: string) => Promise<string | null>;
   
   // Monitoring
@@ -104,6 +115,10 @@ interface AWSContextType {
   
   // Utility functions
   refreshConnection: () => Promise<void>;
+  
+  // Credential management
+  refreshCredentials: () => Promise<boolean>;
+  getConnectionStatus: () => Promise<{connected: boolean, error?: string}>;
 }
 
 const AWSContext = createContext<AWSContextType | undefined>(undefined);
@@ -256,9 +271,10 @@ export function AWSProvider({ children }: AWSProviderProps) {
         setCredentials(awsCredentials);
         console.log('✅ Successfully obtained real AWS credentials from secure backend');
         
-      } catch (error: any) {
-        console.error('❌ Backend role assumption failed:', error.message);
-        setError(`Failed to assume AWS role: ${error.message}`);
+      } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : 'Backend role assumption failed';
+        console.error('❌ Backend role assumption failed:', errorMessage);
+        setError(`Failed to assume AWS role: ${errorMessage}`);
         
         // No fallback - only use real credentials from the backend
         throw error;
@@ -703,7 +719,7 @@ export function AWSProvider({ children }: AWSProviderProps) {
   }, [connection, credentials, getACMClient, findHostedZone, createValidationRecords, waitForCertificateIssuance]);
 
   // Update DNS records
-  const updateDNS = useCallback(async (domainName: string, hostedZoneId: string, records: any[]): Promise<boolean> => {
+  const updateDNS = useCallback(async (domainName: string, hostedZoneId: string, records: DNSRecord[]): Promise<boolean> => {
     try {
       if (!connection || !credentials) {
         throw new Error('AWS connection not established');
@@ -859,11 +875,10 @@ export function AWSProvider({ children }: AWSProviderProps) {
         valid: true,
         accountId: accountId
       };
-    } catch (err: any) {
-      return {
-        valid: false,
-        error: err.message || "Invalid role ARN format"
-      };
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to validate role';
+      console.error('Failed to validate role:', error);
+      return { valid: false, error: errorMessage };
     }
   }, []);
 
@@ -898,14 +913,62 @@ export function AWSProvider({ children }: AWSProviderProps) {
   }, [connection]);
 
   // Refresh connection
-  const refreshConnection = useCallback(async (): Promise<void> => {
-    if (connection && credentials) {
-      // Check if credentials are still valid
-      if (new Date() > credentials.expiration) {
-        await disconnect();
+  const refreshConnection = useCallback(async () => {
+    if (!connection) return;
+    
+    try {
+      const isValid = await validateRole(connection.role_arn);
+      if (!isValid.valid) {
+        setError('Role validation failed');
+        return;
       }
+      
+      // Refresh credentials
+      const newCredentials = await getCredentialsFromRole(connection.role_arn, connection.external_id);
+      if (newCredentials) {
+        setCredentials(newCredentials);
+        setError(null);
+      }
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to refresh connection';
+      setError(errorMessage);
     }
-  }, [connection, credentials, disconnect]);
+  }, [connection, validateRole]);
+
+  const refreshCredentials = useCallback(async (): Promise<boolean> => {
+    if (!connection) return false;
+    
+    try {
+      const newCredentials = await getCredentialsFromRole(connection.role_arn, connection.external_id);
+      if (newCredentials) {
+        setCredentials(newCredentials);
+        return true;
+      }
+      return false;
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to refresh credentials';
+      console.error('Failed to refresh credentials:', err);
+      setError(errorMessage);
+      return false;
+    }
+  }, [connection]);
+
+  const getConnectionStatus = useCallback(async (): Promise<{connected: boolean, error?: string}> => {
+    if (!connection) {
+      return { connected: false, error: 'No connection configured' };
+    }
+    
+    try {
+      const isValid = await validateRole(connection.role_arn);
+      return { 
+        connected: isValid.valid, 
+        error: isValid.valid ? undefined : isValid.error 
+      };
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to check connection status';
+      return { connected: false, error: errorMessage };
+    }
+  }, [connection, validateRole]);
 
   // Check credentials expiration periodically
   useEffect(() => {

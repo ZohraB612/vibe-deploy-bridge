@@ -5,7 +5,6 @@ import { useAWS } from "./AWSContext";
 
 export interface Domain {
   id: string;
-  project_id: string;
   user_id: string;
   domain_name: string;
   status: 'pending' | 'verified' | 'active' | 'error';
@@ -16,7 +15,7 @@ export interface Domain {
   verification_token?: string;
   created_at: string;
   updated_at: string;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 export interface DNSRecord {
@@ -107,9 +106,10 @@ export function DomainProvider({ children }: DomainProviderProps) {
       }
 
       setDomains(data || []);
-    } catch (err: any) {
-      setError(err.message || 'Failed to load domains');
-      console.error('Error loading domains:', err);
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to fetch domains';
+      setError(errorMessage);
+      console.error("Failed to fetch domains:", err);
     } finally {
       setIsLoading(false);
     }
@@ -145,8 +145,9 @@ export function DomainProvider({ children }: DomainProviderProps) {
 
       setDomains(prev => [data, ...prev]);
       return data;
-    } catch (err: any) {
-      setError(err.message || 'Failed to add domain');
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to add domain';
+      setError(errorMessage);
       console.error('Error adding domain:', err);
       return null;
     }
@@ -174,8 +175,9 @@ export function DomainProvider({ children }: DomainProviderProps) {
       ));
       
       return data;
-    } catch (err: any) {
-      setError(err.message || 'Failed to update domain');
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to update domain';
+      setError(errorMessage);
       console.error('Error updating domain:', err);
       return null;
     }
@@ -198,8 +200,9 @@ export function DomainProvider({ children }: DomainProviderProps) {
 
       setDomains(prev => prev.filter(domain => domain.id !== id));
       return true;
-    } catch (err: any) {
-      setError(err.message || 'Failed to delete domain');
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to delete domain';
+      setError(errorMessage);
       console.error('Error deleting domain:', err);
       return false;
     }
@@ -241,8 +244,9 @@ export function DomainProvider({ children }: DomainProviderProps) {
       }
 
       return false;
-    } catch (error) {
-      console.error('Error provisioning SSL:', error);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to provision SSL';
+      console.error('Error provisioning SSL:', errorMessage);
       return false;
     }
   }, [domains, loadDomains, useAWS]);
@@ -283,8 +287,9 @@ export function DomainProvider({ children }: DomainProviderProps) {
       }
 
       return false;
-    } catch (error) {
-      console.error('Error renewing SSL:', error);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to renew SSL';
+      console.error('Error renewing SSL:', errorMessage);
       return false;
     }
   }, [domains, loadDomains, useAWS]);
@@ -321,13 +326,15 @@ export function DomainProvider({ children }: DomainProviderProps) {
         } else {
           throw new Error('AWS connection not established. Please connect your AWS account first.');
         }
-      } catch (awsError) {
-        setError(awsError instanceof Error ? awsError.message : 'Failed to verify domain with AWS');
+      } catch (awsError: unknown) {
+        const errorMessage = awsError instanceof Error ? awsError.message : 'Failed to verify domain with AWS';
+        setError(errorMessage);
         console.error('Error verifying domain:', awsError);
         return false;
       }
-    } catch (err: any) {
-      setError(err.message || 'Failed to verify domain');
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to verify domain';
+      setError(errorMessage);
       console.error('Error verifying domain:', err);
       return false;
     }
@@ -363,7 +370,7 @@ export function DomainProvider({ children }: DomainProviderProps) {
             }
           }
         }
-      } catch (awsError) {
+      } catch (awsError: unknown) {
         console.warn('AWS DNS update failed, keeping local record only:', awsError);
       }
 
@@ -373,8 +380,9 @@ export function DomainProvider({ children }: DomainProviderProps) {
       });
 
       return newRecord;
-    } catch (err: any) {
-      setError(err.message || 'Failed to add DNS record');
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to add DNS record';
+      setError(errorMessage);
       console.error('Error adding DNS record:', err);
       return null;
     }
@@ -407,7 +415,7 @@ export function DomainProvider({ children }: DomainProviderProps) {
             }
           }
         }
-      } catch (awsError) {
+      } catch (awsError: unknown) {
         console.warn('AWS DNS update failed, keeping local record only:', awsError);
       }
 
@@ -415,8 +423,9 @@ export function DomainProvider({ children }: DomainProviderProps) {
       await updateDomain(domainId, { dns_records: updatedRecords });
       
       return updatedRecords.find(r => r.id === recordId) || null;
-    } catch (err: any) {
-      setError(err.message || 'Failed to update DNS record');
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to update DNS record';
+      setError(errorMessage);
       console.error('Error updating DNS record:', err);
       return null;
     }
@@ -443,7 +452,7 @@ export function DomainProvider({ children }: DomainProviderProps) {
             await awsConnection.updateDNS(domain.domain_name, hostedZoneId, updatedRecords);
           }
         }
-      } catch (awsError) {
+      } catch (awsError: unknown) {
         console.warn('AWS DNS update failed, keeping local record only:', awsError);
       }
 
@@ -451,8 +460,9 @@ export function DomainProvider({ children }: DomainProviderProps) {
       await updateDomain(domainId, { dns_records: updatedRecords });
       
       return true;
-    } catch (err: any) {
-      setError(err.message || 'Failed to delete DNS record');
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to delete DNS record';
+      setError(errorMessage);
       console.error('Error deleting DNS record:', err);
       return false;
     }

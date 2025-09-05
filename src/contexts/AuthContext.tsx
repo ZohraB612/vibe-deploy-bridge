@@ -85,9 +85,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
       console.log('AuthContext: Profile loaded successfully:', profile?.email);
       return profile;
-    } catch (err) {
-      console.error('AuthContext: Error loading user profile (timeout or error):', err);
-      return null;
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to load user profile';
+      console.error('Error loading user profile:', err);
+      setError(errorMessage);
+    } finally {
+      setIsLoading(false);
     }
   }, []);
 
@@ -101,13 +104,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
         email: user.email
       });
 
-      const profileData = {
+      const profileData: Partial<Profile> = {
         id: user.id,
         email: user.email || '',
-        name: user.user_metadata?.name || user.user_metadata?.full_name || user.email?.split('@')[0] || '',
-        avatar_url: user.user_metadata?.avatar_url || user.user_metadata?.picture || null,
-        provider: user.app_metadata?.provider || 'email',
-        metadata: user.user_metadata || null,
+        name: user.user_metadata?.full_name || user.user_metadata?.name || '',
+        avatar_url: user.user_metadata?.avatar_url || user.user_metadata?.picture || '',
         updated_at: new Date().toISOString(),
       };
 
@@ -124,7 +125,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
         .select()
         .single();
 
-      const { data, error } = await Promise.race([upsertPromise, timeoutPromise]) as any;
+      const { data, error } = await Promise.race([upsertPromise, timeoutPromise]) as {
+        data: Profile | null;
+        error: { code: string; message: string } | null;
+      };
 
       if (error) {
         console.error('AuthContext: Error upserting user profile:', error);
@@ -133,8 +137,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
       console.log('AuthContext: Profile upserted successfully:', data);
       return data;
-    } catch (err) {
-      console.error('AuthContext: Error upserting user profile (timeout or error):', err);
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to upsert user profile';
+      console.error('Error upserting user profile:', err);
+      setError(errorMessage);
       return null;
     }
   }, []);
@@ -152,9 +158,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
           setUser(userWithProfile);
           setSession(session);
         }
-      } catch (err) {
+      } catch (err: unknown) {
+        const errorMessage = err instanceof Error ? err.message : 'Failed to load session';
         console.error('Error getting initial session:', err);
-        setError('Failed to load session');
+        setError(errorMessage);
       } finally {
         setIsLoading(false);
       }
@@ -303,8 +310,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setUser(prev => prev ? { ...prev, profile: data } : null);
       
       return { error: null };
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to update profile';
+      setError(errorMessage);
       return { error: err as AuthError };
     }
   }, [user]);

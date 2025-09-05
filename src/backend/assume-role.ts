@@ -1,7 +1,7 @@
 import { STSClient, AssumeRoleCommand } from "@aws-sdk/client-sts";
 
 // AWS Lambda handler for role assumption
-export const handler = async (event: any) => {
+export async function assumeRole(event: { httpMethod: string; body?: string }): Promise<{ statusCode: number; headers: Record<string, string>; body: string }> {
   // CORS headers for web requests
   const headers = {
     'Access-Control-Allow-Origin': '*',
@@ -93,22 +93,24 @@ export const handler = async (event: any) => {
       })
     };
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Role assumption failed:', error);
     
     // Return specific error messages for common issues
     let errorMessage = 'Failed to assume AWS role';
     let statusCode = 500;
 
-    if (error.name === 'AccessDenied') {
-      errorMessage = 'Access denied. Please check your Role ARN and External ID.';
-      statusCode = 403;
-    } else if (error.name === 'InvalidParameterValue') {
-      errorMessage = 'Invalid parameters provided.';
-      statusCode = 400;
-    } else if (error.name === 'MalformedPolicyDocument') {
-      errorMessage = 'Invalid role trust policy. Please check your IAM role configuration.';
-      statusCode = 400;
+    if (error instanceof Error) {
+      if (error.name === 'AccessDenied') {
+        errorMessage = 'Access denied. Please check your Role ARN and External ID.';
+        statusCode = 403;
+      } else if (error.name === 'InvalidParameterValue') {
+        errorMessage = 'Invalid parameters provided.';
+        statusCode = 400;
+      } else if (error.name === 'MalformedPolicyDocument') {
+        errorMessage = 'Invalid role trust policy. Please check your IAM role configuration.';
+        statusCode = 400;
+      }
     }
 
     return {
@@ -116,7 +118,7 @@ export const handler = async (event: any) => {
       headers,
       body: JSON.stringify({
         error: errorMessage,
-        details: error.message
+        details: error instanceof Error ? error.message : 'Unknown error'
       })
     };
   }

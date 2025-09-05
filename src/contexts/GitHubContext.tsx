@@ -18,24 +18,52 @@ interface GitHubRepo {
 
 // Use the database type instead of local interface
 
+interface GitHubCommit {
+  sha: string;
+  commit: {
+    message: string;
+    author: {
+      name: string;
+      email: string;
+      date: string;
+    };
+  };
+  author: {
+    login: string;
+    avatar_url: string;
+  };
+}
+
+interface GitHubBranch {
+  name: string;
+  commit: {
+    sha: string;
+  };
+}
+
+interface GitHubContent {
+  type: 'file' | 'dir';
+  name: string;
+  path: string;
+  sha: string;
+  size: number;
+  url: string;
+  download_url?: string;
+  content?: string;
+  encoding?: string;
+}
+
 interface GitHubContextType {
   connectedRepos: ConnectedRepository[];
   isLoading: boolean;
   error: string | null;
-  
-  // Repository management
-  addConnectedRepo: (repo: GitHubRepo) => Promise<boolean>;
-  removeConnectedRepo: (repoId: string) => Promise<boolean>;
-  refreshConnectedRepos: () => Promise<void>;
-  
-  // GitHub API operations
+  connectRepository: (repoData: GitHubRepositoryData) => Promise<ConnectedRepository | null>;
+  disconnectRepository: (repoId: string) => Promise<boolean>;
+  refreshConnections: () => Promise<void>;
   getRepoBranches: (repoFullName: string) => Promise<string[]>;
-  getRepoCommits: (repoFullName: string, branch: string) => Promise<any[]>;
-  getRepoContent: (repoFullName: string, path: string, branch?: string) => Promise<any>;
-  
-  // Utility methods
-  isRepoConnected: (repoId: number) => boolean;
-  getConnectedRepo: (repoId: number) => ConnectedRepository | undefined;
+  getRepoCommits: (repoFullName: string, branch: string) => Promise<GitHubCommit[]>;
+  getRepoContent: (repoFullName: string, path: string, branch?: string) => Promise<GitHubContent>;
+  loadConnectedRepos: () => Promise<void>;
 }
 
 const GitHubContext = createContext<GitHubContextType | undefined>(undefined);
@@ -221,14 +249,14 @@ export function GitHubProvider({ children }: GitHubProviderProps) {
       }
 
       const branches = await response.json();
-      return branches.map((branch: any) => branch.name);
+      return branches.map((branch: GitHubBranch) => branch.name);
     } catch (error) {
       console.error('Failed to fetch repository branches:', error);
       return [];
     }
   }, []);
 
-  const getRepoCommits = useCallback(async (repoFullName: string, branch: string): Promise<any[]> => {
+  const getRepoCommits = useCallback(async (repoFullName: string, branch: string): Promise<GitHubCommit[]> => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const githubToken = session?.provider_token || session?.access_token;
@@ -249,7 +277,7 @@ export function GitHubProvider({ children }: GitHubProviderProps) {
       }
 
       const commits = await response.json();
-      return commits.map((commit: any) => ({
+      return commits.map((commit: GitHubCommit) => ({
         sha: commit.sha,
         message: commit.commit.message,
         author: commit.commit.author.name,
@@ -262,7 +290,7 @@ export function GitHubProvider({ children }: GitHubProviderProps) {
     }
   }, []);
 
-  const getRepoContent = useCallback(async (repoFullName: string, path: string, branch?: string): Promise<any> => {
+  const getRepoContent = useCallback(async (repoFullName: string, path: string, branch?: string): Promise<GitHubContent> => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const githubToken = session?.provider_token || session?.access_token;
@@ -297,7 +325,7 @@ export function GitHubProvider({ children }: GitHubProviderProps) {
     return connectedRepos.some(repo => repo.github_repo_id === repoId);
   }, [connectedRepos]);
 
-  const getConnectedRepo = useCallback((repoId: number): ConnectedRepo | undefined => {
+  const getConnectedRepo = useCallback((repoId: number): ConnectedRepository | undefined => {
     return connectedRepos.find(repo => repo.github_repo_id === repoId);
   }, [connectedRepos]);
 

@@ -34,35 +34,24 @@ interface DeploymentProgressProps {
   estimatedTime?: number; // in seconds
 }
 
-const stepIcons = {
-  'pending': Clock,
-  'in-progress': Loader2,
-  'completed': CheckCircle,
-  'failed': AlertCircle
-};
+// Move constants outside component to avoid fast refresh warning
+const DEPLOYMENT_STEPS = [
+  { id: 'upload', label: 'Uploading Files', description: 'Preparing your project files for deployment' },
+  { id: 's3', label: 'Creating S3 Bucket', description: 'Setting up cloud storage for your project' },
+  { id: 'website', label: 'Configuring Website', description: 'Enabling static website hosting' },
+  { id: 'cloudfront', label: 'Setting up CloudFront', description: 'Creating content delivery network' },
+  { id: 'dns', label: 'Configuring DNS', description: 'Setting up domain routing' },
+  { id: 'ssl', label: 'Provisioning SSL', description: 'Securing your website with HTTPS' },
+  { id: 'complete', label: 'Deployment Complete', description: 'Your website is now live!' }
+];
 
-const stepColors = {
-  'pending': 'text-muted-foreground',
-  'in-progress': 'text-primary',
-  'completed': 'text-green-600',
-  'failed': 'text-red-600'
-};
-
-const stepBgColors = {
-  'pending': 'bg-muted',
-  'in-progress': 'bg-primary/10',
-  'completed': 'bg-green-100',
-  'failed': 'bg-red-100'
-};
-
-export function DeploymentProgress({
-  steps,
-  currentStep,
-  overallProgress,
-  isDeploying,
-  onRetry,
-  onCancel,
-  estimatedTime
+export function DeploymentProgress({ 
+  currentStep, 
+  isComplete, 
+  error, 
+  onRetry, 
+  projectName,
+  deploymentUrl 
 }: DeploymentProgressProps) {
   const [timeElapsed, setTimeElapsed] = useState(0);
 

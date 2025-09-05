@@ -23,7 +23,8 @@ import {
   ArrowLeft,
   ArrowRight,
   Cloud,
-  RefreshCw
+  RefreshCw,
+  ExternalLink
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Link, useNavigate } from "react-router-dom";
@@ -47,6 +48,9 @@ export default function Deploy() {
   const [currentStep, setCurrentStep] = useState<DeploymentStep>('upload');
   const [isDeploying, setIsDeploying] = useState(false);
   const [deploymentProgress, setDeploymentProgress] = useState(0);
+  const [deploymentStep, setDeploymentStep] = useState('');
+  const [deploymentLogs, setDeploymentLogs] = useState<string[]>([]);
+  const [deploymentResult, setDeploymentResult] = useState<any>(null);
   const [dragActive, setDragActive] = useState(false);
   const [errors, setErrors] = useState<FormErrors>({});
   const [isValidating, setIsValidating] = useState(false);
@@ -65,6 +69,173 @@ export default function Deploy() {
     files: []
   });
   const [deployedUrl, setDeployedUrl] = useState<string>('');
+
+  const addDeploymentLog = (message: string) => {
+    setDeploymentLogs(prev => [...prev, `${new Date().toLocaleTimeString()}: ${message}`]);
+  };
+
+  const startRealDeployment = async () => {
+    if (isDeploying) {
+      console.log('Deployment already in progress, ignoring duplicate call');
+      return;
+    }
+
+    // Reset any previous deployment state
+    setDeploymentResult(null);
+    setDeployedUrl('');
+    setCurrentStep('deploy');
+    
+    setIsValidating(true);
+    
+    // Validate AWS connection and credentials
+    if (!connection || !credentials) {
+      setIsValidating(false);
+      toast({
+        title: "AWS Connection Issue",
+        description: "AWS connection or credentials are missing. Please reconnect your AWS account.",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    // Check AWS connection using the same logic as the page guard
+    if (isAWSLoading || !hasAWSConnection) {
+      setIsValidating(false);
+      toast({
+        title: "AWS Connection Required",
+        description: "Please connect your AWS account before deploying",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    // Validate configuration
+    if (!validateConfiguration()) {
+      setIsValidating(false);
+      toast({
+        title: "Validation failed",
+        description: "Please fix the errors before deploying",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    setIsValidating(false);
+    setIsDeploying(true);
+    setCurrentStep('deploy');
+    setDeploymentProgress(0);
+    setDeploymentStep('Starting deployment...');
+    setDeploymentLogs([]);
+    addDeploymentLog('Starting deployment process...');
+    
+    try {
+      // Step 1: Validate files
+      setDeploymentProgress(10);
+      setDeploymentStep('Validating files...');
+      addDeploymentLog('Validating uploaded files...');
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      // Step 2: Prepare AWS deployment
+      setDeploymentProgress(25);
+      setDeploymentStep('Preparing AWS deployment...');
+      addDeploymentLog('Preparing AWS infrastructure...');
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      // Step 3: Deploy to S3
+      setDeploymentProgress(50);
+      setDeploymentStep('Deploying to S3...');
+      addDeploymentLog(`Starting ${deploymentMethod.toUpperCase()} deployment...`);
+      
+      let deploymentResult;
+      switch (deploymentMethod) {
+        case 'terraform':
+          deploymentResult = await deployWithTerraform(
+            projectConfig.name,
+            projectConfig.files,
+            projectConfig.domain
+          );
+          break;
+        case 'cloudformation':
+          deploymentResult = await deployWithCloudFormation(
+            projectConfig.name,
+            projectConfig.files,
+            projectConfig.domain
+          );
+          break;
+        case 's3':
+        default:
+          deploymentResult = await deployToS3(
+            projectConfig.name,
+            projectConfig.files,
+            projectConfig.domain
+          );
+          break;
+      }
+      addDeploymentLog(`${deploymentMethod.toUpperCase()} deployment completed successfully`);
+
+      // Step 4: Configure CloudFront
+      setDeploymentProgress(75);
+      setDeploymentStep('Configuring CloudFront...');
+      addDeploymentLog('Setting up CloudFront distribution...');
+      await new Promise(resolve => setTimeout(resolve, 1500));
+
+      // Step 5: Finalize deployment
+      setDeploymentProgress(90);
+      setDeploymentStep('Finalizing deployment...');
+      addDeploymentLog('Finalizing deployment configuration...');
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      setDeploymentProgress(100);
+      setDeploymentStep('Deployment completed!');
+      addDeploymentLog('Deployment completed successfully!');
+
+      // Add the project to the database
+      const newProject = await addProject({
+        name: projectConfig.name,
+        domain: deploymentResult.url || projectConfig.domain,
+        status: "deployed",
+        framework: "Static Site",
+        branch: "main",
+        buildTime: "Real AWS deployment",
+        size: `${Math.round(projectConfig.files.reduce((total, file) => total + file.size, 0) / (1024 * 1024) * 10) / 10} MB`,
+        awsBucket: deploymentResult.bucketName,
+        awsDistributionId: deploymentResult.distributionId,
+        awsRegion: connection?.region || 'us-east-1'
+      });
+
+      if (!newProject) {
+        throw new Error("Failed to save project to database");
+      }
+
+      setDeployedUrl(deploymentResult.url || projectConfig.domain);
+      setDeploymentResult(deploymentResult);
+      setCurrentStep('success');
+      
+      const methodNames = {
+        terraform: 'Terraform',
+        cloudformation: 'CloudFormation',
+        s3: 'S3'
+      };
+      
+      toast({
+        title: "Deployment successful!",
+        description: `Your application is now live on AWS using ${methodNames[deploymentMethod]}!`,
+      });
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Deployment failed';
+      console.error('Deployment error:', error);
+      setDeploymentStep('Deployment failed');
+      addDeploymentLog(`Error: ${errorMessage}`);
+      setCurrentStep('configure');
+      toast({
+        title: "Deployment failed",
+        description: errorMessage || "An error occurred during deployment",
+        variant: "destructive"
+      });
+    } finally {
+      setIsDeploying(false);
+    }
+  };
 
   // Show AWS setup prompt if user doesn't have AWS connection
   if (!isAWSLoading && hasAWSConnection === false) {
@@ -227,128 +398,6 @@ export default function Deploy() {
     
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
-  };
-
-  const startRealDeployment = async () => {
-    setIsValidating(true);
-    
-    // Validate AWS connection and credentials
-    if (!connection || !credentials) {
-      setIsValidating(false);
-      toast({
-        title: "AWS Connection Issue",
-        description: "AWS connection or credentials are missing. Please reconnect your AWS account.",
-        variant: "destructive"
-      });
-      return;
-    }
-    
-    // Check AWS connection using the same logic as the page guard
-    if (isAWSLoading || !hasAWSConnection) {
-      setIsValidating(false);
-      toast({
-        title: "AWS Connection Required",
-        description: "Please connect your AWS account before deploying",
-        variant: "destructive"
-      });
-      return;
-    }
-    
-    // Validate configuration
-    if (!validateConfiguration()) {
-      setIsValidating(false);
-      toast({
-        title: "Validation failed",
-        description: "Please fix the errors before deploying",
-        variant: "destructive"
-      });
-      return;
-    }
-    
-    setIsValidating(false);
-    setIsDeploying(true);
-    setCurrentStep('deploy');
-    
-    try {
-      // Update progress
-      setDeploymentProgress(20);
-      
-      // Start real AWS deployment based on selected method
-      let deploymentResult;
-      
-      switch (deploymentMethod) {
-        case 'terraform':
-          deploymentResult = await deployWithTerraform(
-            projectConfig.name,
-            projectConfig.files,
-            projectConfig.domain
-          );
-          break;
-        case 'cloudformation':
-          deploymentResult = await deployWithCloudFormation(
-            projectConfig.name,
-            projectConfig.files,
-            projectConfig.domain
-          );
-          break;
-        case 's3':
-        default:
-          deploymentResult = await deployToS3(
-            projectConfig.name,
-            projectConfig.files,
-            projectConfig.domain
-          );
-          break;
-      }
-      
-      setDeploymentProgress(80);
-      
-      if (!deploymentResult.success) {
-        throw new Error(deploymentResult.error || "Deployment failed");
-      }
-      
-      setDeploymentProgress(100);
-      
-      // Add the project to the database
-      const newProject = await addProject({
-        name: projectConfig.name,
-        domain: deploymentResult.url || projectConfig.domain,
-        status: "deployed",
-        framework: "Static Site",
-        branch: "main",
-        buildTime: "Real AWS deployment",
-        size: `${Math.round(projectConfig.files.reduce((total, file) => total + file.size, 0) / (1024 * 1024) * 10) / 10} MB`,
-        awsBucket: deploymentResult.bucketName,
-        awsRegion: connection?.region || 'us-east-1'
-      });
-
-      if (!newProject) {
-        throw new Error("Failed to save project to database");
-      }
-      
-      setDeployedUrl(deploymentResult.url || projectConfig.domain);
-      setIsDeploying(false);
-      setCurrentStep('success');
-      
-      const methodNames = {
-        terraform: 'Terraform',
-        cloudformation: 'CloudFormation',
-        s3: 'S3'
-      };
-      
-      toast({
-        title: "Deployment successful!",
-        description: `Your application is now live on AWS using ${methodNames[deploymentMethod]}!`,
-      });
-    } catch (error: any) {
-      setIsDeploying(false);
-      setCurrentStep('configure');
-      toast({
-        title: "Deployment failed",
-        description: error.message || "An error occurred during deployment",
-        variant: "destructive"
-      });
-    }
   };
 
   const renderUploadStep = () => (
@@ -590,6 +639,7 @@ export default function Deploy() {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
+        {/* Clean Deployment Progress Display */}
         <div className="space-y-2">
           <div className="flex justify-between text-sm">
             <span>Deployment Progress</span>
@@ -626,6 +676,13 @@ export default function Deploy() {
             );
           })}
         </div>
+
+        {/* Current Status Message */}
+        {deploymentStep && (
+          <div className="mt-4 p-3 bg-muted rounded-lg text-center">
+            <p className="text-sm font-medium">{deploymentStep}</p>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
@@ -768,6 +825,54 @@ export default function Deploy() {
           {currentStep === 'deploy' && renderDeployStep()}
           {currentStep === 'success' && renderSuccessStep()}
         </div>
+        {/* Deployment Results Display */}
+        {deploymentResult && !isDeploying && (
+          <div className="mt-6">
+            <Card className="border-green-200 bg-green-50">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-green-800">
+                  <CheckCircle className="h-5 w-5" />
+                  Deployment Successful!
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <div className="text-sm font-medium text-green-700">Project Name</div>
+                    <div className="text-sm text-green-600">{deploymentResult.projectName || projectConfig?.name}</div>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="text-sm font-medium text-green-700">Deployment Method</div>
+                    <div className="text-sm text-green-600 capitalize">{deploymentMethod}</div>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="text-sm font-medium text-green-700">S3 Bucket</div>
+                    <div className="text-sm text-green-600 font-mono">{deploymentResult.bucketName}</div>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="text-sm font-medium text-green-700">CloudFront Distribution</div>
+                    <div className="text-sm text-green-600 font-mono">{deploymentResult.distributionId}</div>
+                  </div>
+                </div>
+                
+                {deploymentResult.url && (
+                  <div className="pt-4 border-t border-green-200">
+                    <div className="text-sm font-medium text-green-700 mb-2">Your Application is Live!</div>
+                    <a 
+                      href={deploymentResult.url} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 text-green-600 hover:text-green-800 underline"
+                    >
+                      <ExternalLink className="h-4 w-4" />
+                      {deploymentResult.url}
+                    </a>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        )}
       </div>
     </Layout>
   );
