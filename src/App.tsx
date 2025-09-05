@@ -19,6 +19,7 @@ import Settings from "./pages/Settings";
 import ProjectDetails from "./pages/ProjectDetails";
 import DomainManagement from "./pages/DomainManagement";
 import AuthCallback from "./pages/AuthCallback";
+import EnhancedDashboard from "./pages/EnhancedDashboard";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -43,6 +44,14 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <Dashboard />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/enhanced-dashboard" 
+              element={
+                <ProtectedRoute>
+                  <EnhancedDashboard />
                 </ProtectedRoute>
               } 
             />

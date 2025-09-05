@@ -24,12 +24,15 @@ import {
   ArrowRight,
   Cloud,
   RefreshCw,
-  ExternalLink
+  ExternalLink,
+  Activity
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Link, useNavigate } from "react-router-dom";
+import ScalingManagement from "@/components/scaling-management";
+import PrefectManagement from "@/components/prefect-management";
 
-type DeploymentStep = 'upload' | 'configure' | 'deploy' | 'success';
+type DeploymentStep = 'upload' | 'configure' | 'scaling' | 'deploy' | 'success';
 
 interface ProjectConfig {
   name: string;
@@ -625,6 +628,68 @@ export default function Deploy() {
             Back
           </Button>
           <Button 
+            onClick={() => setCurrentStep('scaling')}
+            disabled={!projectConfig.name.trim()}
+            className="bg-gradient-primary hover:shadow-glow min-w-32"
+          >
+            Next Step
+            <ArrowRight className="h-4 w-4 ml-2" />
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+
+  const renderScalingStep = () => (
+    <div className="w-full max-w-6xl mx-auto space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Activity className="h-5 w-5" />
+            Configure Scaling & Workflows
+          </CardTitle>
+          <CardDescription>
+            Set up auto-scaling policies and Prefect workflows for your deployment (Optional)
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Alert className="mb-6">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>
+              This step is optional. You can skip it and configure scaling later from your dashboard.
+            </AlertDescription>
+          </Alert>
+          
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div>
+              <h3 className="text-lg font-semibold mb-4">Auto-Scaling Configuration</h3>
+              <ScalingManagement projectId={projectConfig.name} />
+            </div>
+            
+            <div>
+              <h3 className="text-lg font-semibold mb-4">Workflow Management</h3>
+              <PrefectManagement />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="flex justify-between">
+        <Button 
+          variant="outline" 
+          onClick={() => setCurrentStep('configure')}
+        >
+          <ArrowLeft className="h-4 w-4 mr-2" />
+          Back
+        </Button>
+        <div className="flex gap-2">
+          <Button 
+            variant="outline" 
+            onClick={() => setCurrentStep('deploy')}
+          >
+            Skip Scaling
+          </Button>
+          <Button 
             onClick={startRealDeployment}
             disabled={!projectConfig.name.trim() || isValidating || !connection || !connection.is_active}
             className="bg-gradient-primary hover:shadow-glow min-w-32"
@@ -637,8 +702,8 @@ export default function Deploy() {
             {isValidating ? "Validating..." : "Deploy Now"}
           </Button>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 
   const renderDeployStep = () => (
@@ -779,8 +844,9 @@ export default function Deploy() {
     switch (currentStep) {
       case 'upload': return 1;
       case 'configure': return 2;
-      case 'deploy': return 3;
-      case 'success': return 4;
+      case 'scaling': return 3;
+      case 'deploy': return 4;
+      case 'success': return 5;
       default: return 1;
     }
   };
@@ -802,8 +868,9 @@ export default function Deploy() {
             {[
               { step: 1, label: 'Upload', key: 'upload' },
               { step: 2, label: 'Configure', key: 'configure' },
-              { step: 3, label: 'Deploy', key: 'deploy' },
-              { step: 4, label: 'Success', key: 'success' }
+              { step: 3, label: 'Scaling', key: 'scaling' },
+              { step: 4, label: 'Deploy', key: 'deploy' },
+              { step: 5, label: 'Success', key: 'success' }
             ].map(({ step, label, key }) => (
               <div key={step} className="flex items-center">
                 <div className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium ${
@@ -822,7 +889,7 @@ export default function Deploy() {
                 }`}>
                   {label}
                 </span>
-                {step < 4 && (
+                {step < 5 && (
                   <div className={`ml-4 w-8 h-px ${
                     getStepNumber() > step ? 'bg-primary' : 'bg-muted'
                   }`} />
@@ -836,6 +903,7 @@ export default function Deploy() {
         <div className="flex justify-center">
           {currentStep === 'upload' && renderUploadStep()}
           {currentStep === 'configure' && renderConfigureStep()}
+          {currentStep === 'scaling' && renderScalingStep()}
           {currentStep === 'deploy' && renderDeployStep()}
           {currentStep === 'success' && renderSuccessStep()}
         </div>
