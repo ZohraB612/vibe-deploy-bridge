@@ -5,7 +5,7 @@ echo "=================================="
 echo ""
 
 # Check if backend type is specified
-BACKEND_TYPE=${1:-"node"}
+BACKEND_TYPE=${1:-"fastapi"}
 
 # Function to cleanup background processes
 cleanup() {
@@ -97,7 +97,7 @@ elif [ "$BACKEND_TYPE" = "node" ]; then
 else
     echo "❌ Invalid backend type. Use 'fastapi' or 'node'"
     echo "Usage: ./start-full-stack.sh [fastapi|node]"
-    echo "Default: node"
+    echo "Default: fastapi"
     exit 1
 fi
 
@@ -118,6 +118,8 @@ echo "🔧 Backend: http://localhost:3001"
 if [ "$BACKEND_TYPE" = "fastapi" ]; then
     echo "📝 API Documentation: http://localhost:3001/docs"
     echo "🔧 Enhanced Deploy: http://localhost:3001/api/v1/deployment/enhanced"
+    echo "🔧 AWS Deploy: http://localhost:3001/api/v1/deploy-s3-enhanced"
+    echo "🔧 AWS Assume Role: http://localhost:3001/api/v1/assume-role"
     echo "🎯 Demo Endpoints: http://localhost:3001/api/v1/demo/"
 else
     echo "📝 Deploy endpoint: http://localhost:3001/deploy-s3"

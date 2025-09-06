@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from "react";
+import { createContext, useContext, useState, useEffect, ReactNode, useCallback, useMemo } from "react";
 import { useAuth } from "./AuthContext";
 import { supabase } from "@/lib/supabase";
 import { 
@@ -238,7 +238,7 @@ export function AWSProvider({ children }: AWSProviderProps) {
       try {
         const apiUrl = import.meta.env.VITE_DEPLOYHUB_API_URL || 'https://your-api-gateway-url.execute-api.us-east-1.amazonaws.com/prod';
         
-        const response = await fetch(`${apiUrl}/assume-role`, {
+        const response = await fetch(`${apiUrl}/api/v1/assume-role`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -358,7 +358,8 @@ export function AWSProvider({ children }: AWSProviderProps) {
           const base64Content = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
           return {
             name: file.name,
-            content: base64Content
+            content: base64Content,
+            type: file.type
           };
         })
       );
@@ -367,7 +368,7 @@ export function AWSProvider({ children }: AWSProviderProps) {
       const apiUrl = import.meta.env.VITE_DEPLOYHUB_API_URL || 'http://localhost:3001';
       
       addLog("Calling backend deployment API...");
-      const response = await fetch(`${apiUrl}/deploy-s3-enhanced`, {
+      const response = await fetch(`${apiUrl}/api/v1/deploy-s3-enhanced`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -480,7 +481,8 @@ export function AWSProvider({ children }: AWSProviderProps) {
           const base64Content = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
           return {
             name: file.name,
-            content: base64Content
+            content: base64Content,
+            type: file.type
           };
         })
       );
@@ -489,7 +491,7 @@ export function AWSProvider({ children }: AWSProviderProps) {
       const apiUrl = import.meta.env.VITE_DEPLOYHUB_API_URL || 'http://localhost:3001';
       
       addLog("Calling backend deployment API...");
-      const response = await fetch(`${apiUrl}/deploy-s3-enhanced`, {
+      const response = await fetch(`${apiUrl}/api/v1/deploy-s3-enhanced`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -880,6 +882,47 @@ export function AWSProvider({ children }: AWSProviderProps) {
     }
   }, []);
 
+  // Helper function to get credentials from role
+  const getCredentialsFromRole = useCallback(async (roleArn: string, externalId: string): Promise<AWSCredentials | null> => {
+    try {
+      const apiUrl = import.meta.env.VITE_DEPLOYHUB_API_URL || 'https://your-api-gateway-url.execute-api.us-east-1.amazonaws.com/prod';
+      
+      const response = await fetch(`${apiUrl}/api/v1/assume-role`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          roleArn,
+          externalId,
+          userId: user?.id,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const result = await response.json();
+
+      if (!result.success || !result.credentials) {
+        throw new Error('Invalid response from role assumption service');
+      }
+
+      return {
+        accessKeyId: result.credentials.accessKeyId,
+        secretAccessKey: result.credentials.secretAccessKey,
+        sessionToken: result.credentials.sessionToken,
+        expiration: new Date(result.credentials.expiration),
+      };
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to get credentials from role';
+      console.error('Failed to get credentials from role:', errorMessage);
+      return null;
+    }
+  }, [user]);
+
   // Disconnect from AWS
   const disconnect = useCallback(async (): Promise<void> => {
     try {
@@ -931,7 +974,7 @@ export function AWSProvider({ children }: AWSProviderProps) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to refresh connection';
       setError(errorMessage);
     }
-  }, [connection, validateRole]);
+  }, [connection, validateRole, getCredentialsFromRole]);
 
   const refreshCredentials = useCallback(async (): Promise<boolean> => {
     if (!connection) return false;
@@ -949,7 +992,7 @@ export function AWSProvider({ children }: AWSProviderProps) {
       setError(errorMessage);
       return false;
     }
-  }, [connection]);
+  }, [connection, getCredentialsFromRole]);
 
   const getConnectionStatus = useCallback(async (): Promise<{connected: boolean, error?: string}> => {
     if (!connection) {
@@ -1004,7 +1047,22 @@ export function AWSProvider({ children }: AWSProviderProps) {
             try {
               const apiUrl = import.meta.env.VITE_DEPLOYHUB_API_URL || 'https://your-api-gateway-url.execute-api.us-east-1.amazonaws.com/prod';
               
-              const response = await fetch(`${apiUrl}/assume-role`, {
+              console.log('🔍 AWSContext: Attempting to assume role with URL:', `${apiUrl}/api/v1/assume-role`);
+              console.log('🔍 AWSContext: Request payload:', {
+                roleArn: existingConnection.role_arn,
+                externalId: existingConnection.external_id,
+                userId: user.id,
+              });
+              
+              // Check if the endpoint exists first
+              try {
+                const healthCheck = await fetch(`${apiUrl}/health`);
+                console.log('🔍 AWSContext: Backend health check:', healthCheck.status);
+              } catch (healthError) {
+                console.error('🔍 AWSContext: Backend health check failed:', healthError);
+              }
+              
+              const response = await fetch(`${apiUrl}/api/v1/assume-role`, {
                 method: 'POST',
                 headers: {
                   'Content-Type': 'application/json',
@@ -1051,7 +1109,7 @@ export function AWSProvider({ children }: AWSProviderProps) {
     loadExistingConnection();
   }, [user]);
 
-  const value: AWSContextType = {
+  const value: AWSContextType = useMemo(() => ({
     connection,
     credentials,
     isConnecting,
@@ -1069,7 +1127,29 @@ export function AWSProvider({ children }: AWSProviderProps) {
     getStackEvents,
     getDistributionStatus,
     refreshConnection,
-  };
+    refreshCredentials,
+    getConnectionStatus,
+  }), [
+    connection,
+    credentials,
+    isConnecting,
+    error,
+    connectWithRole,
+    disconnect,
+    validateRole,
+    deployToS3,
+    deployWithCloudFormation,
+    deployWithTerraform,
+    deleteDeployment,
+    provisionSSL,
+    updateDNS,
+    findHostedZone,
+    getStackEvents,
+    getDistributionStatus,
+    refreshConnection,
+    refreshCredentials,
+    getConnectionStatus,
+  ]);
 
   return (
     <AWSContext.Provider value={value}>

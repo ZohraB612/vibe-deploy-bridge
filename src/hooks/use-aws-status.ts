@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAWS } from '@/contexts/AWSContext';
@@ -65,15 +65,17 @@ export function useAWSStatus() {
     checkAWSConnection();
   }, [user?.id, connection?.id]); // Only depend on IDs, not entire objects
 
+  const refetch = useCallback(() => {
+    setIsLoading(true);
+    setHasAWSConnection(null);
+    setError(null);
+    // This will trigger the useEffect to run again
+  }, []);
+
   return {
     hasAWSConnection,
     isLoading,
     error,
-    refetch: () => {
-      setIsLoading(true);
-      setHasAWSConnection(null);
-      setError(null);
-      // This will trigger the useEffect to run again
-    }
+    refetch
   };
 }

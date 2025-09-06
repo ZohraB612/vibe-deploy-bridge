@@ -12,7 +12,8 @@ from app.api.v1.endpoints import (
     scaling,
     monitoring,
     terraform,
-    demo
+    demo,
+    aws
 )
 
 # Create main API router
@@ -28,3 +29,4 @@ api_router.include_router(scaling.router, prefix="/scaling", tags=["Scaling"])
 api_router.include_router(monitoring.router, prefix="/monitoring", tags=["Monitoring"])
 api_router.include_router(terraform.router, prefix="/terraform", tags=["Infrastructure as Code"])
 api_router.include_router(demo.router, prefix="/demo", tags=["Demo"])
+api_router.include_router(aws.router, tags=["AWS"])

@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
@@ -62,7 +61,7 @@ export function ResourceCleanup({ credentials, region }: ResourceCleanupProps) {
       const distributionList = distributionIds.trim() ? distributionIds.split('\n').map(d => d.trim()).filter(d => d) : [];
 
       const apiUrl = import.meta.env.VITE_DEPLOYHUB_API_URL || 'http://localhost:3001';
-      const response = await fetch(`${apiUrl}/cleanup-resources`, {
+      const response = await fetch(`${apiUrl}/api/v1/cleanup-resources`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -81,18 +80,38 @@ export function ResourceCleanup({ credentials, region }: ResourceCleanupProps) {
       }
 
       const result = await response.json();
-      setCleanupResults(result.results.deleted);
+      
+      // Handle the response structure properly
+      const deletedItems = result.results?.deleted || [];
+      const errors = result.results?.errors || [];
+      
+      // Convert string results to CleanupResult format
+      const successResults: CleanupResult[] = deletedItems.map((item: string) => ({
+        success: true,
+        message: item,
+        details: `Successfully deleted: ${item}`
+      }));
+      
+      const errorResults: CleanupResult[] = errors.map((error: string) => ({
+        success: false,
+        message: error,
+        details: error
+      }));
+      
+      const allResults = [...successResults, ...errorResults];
+      
+      setCleanupResults(allResults);
       setSummary({
-        total: result.results.deleted.length,
-        successful: result.results.deleted.length,
-        failed: 0,
-        results: result.results.deleted
+        total: allResults.length,
+        successful: successResults.length,
+        failed: errorResults.length,
+        results: allResults
       });
       
       toast({
         title: "Cleanup completed",
-        description: `Successfully cleaned up ${result.results.deleted.length} resources.`,
-        variant: "default"
+        description: `Successfully cleaned up ${successResults.length} resources${errorResults.length > 0 ? `, ${errorResults.length} failed` : ''}.`,
+        variant: errorResults.length > 0 ? "destructive" : "default"
       });
 
     } catch (error: unknown) {
@@ -174,20 +193,24 @@ export function ResourceCleanup({ credentials, region }: ResourceCleanupProps) {
           )}
         </Button>
 
-        {cleanupResults && (
+        {cleanupResults.length > 0 && (
           <div className="space-y-3">
             <h4 className="font-medium">Cleanup Results:</h4>
             
-            {summary.total > 0 && (
+            {summary.successful > 0 && (
               <div className="space-y-2">
                 <h5 className="text-sm font-medium text-green-600 flex items-center gap-2">
                   <CheckCircle className="h-4 w-4" />
-                  Successfully Deleted ({summary.total})
+                  Successfully Deleted ({summary.successful})
                 </h5>
                 <div className="bg-green-50 p-3 rounded-md space-y-1">
-                  {summary.results.map((item: string, index: number) => (
-                    <div key={index} className="text-sm text-green-700">{item}</div>
-                  ))}
+                  {summary.results
+                    .filter(result => result.success)
+                    .map((result, index) => (
+                      <div key={index} className="text-sm text-green-700">
+                        {result.message}
+                      </div>
+                    ))}
                 </div>
               </div>
             )}
@@ -199,14 +222,13 @@ export function ResourceCleanup({ credentials, region }: ResourceCleanupProps) {
                   Errors ({summary.failed})
                 </h5>
                 <div className="bg-red-50 p-3 rounded-md space-y-1">
-                  {/* The original code had results.results.errors, but results is no longer used.
-                      Assuming the intent was to show errors from the summary or a placeholder.
-                      For now, we'll show a placeholder or remove if not directly relevant.
-                      Given the new state, it seems the errors are now part of the summary.
-                      Let's assume the errors are the ones that failed to delete. */}
-                  {summary.results.filter((item: string) => item.includes('Error:')).map((error: string, index: number) => (
-                    <div key={index} className="text-sm text-red-700">{error}</div>
-                  ))}
+                  {summary.results
+                    .filter(result => !result.success)
+                    .map((result, index) => (
+                      <div key={index} className="text-sm text-red-700">
+                        {result.message}
+                      </div>
+                    ))}
                 </div>
               </div>
             )}

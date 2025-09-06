@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DeployHub Test - Content Type Fix</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            min-height: 100vh;
+        }
+        .container {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 30px;
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+        h1 {
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+        }
+        .success {
+            background: rgba(34, 197, 94, 0.2);
+            border: 2px solid #22c55e;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+            text-align: center;
+        }
+        .info {
+            background: rgba(59, 130, 246, 0.2);
+            border: 2px solid #3b82f6;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+        }
+        .code {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 10px;
+            border-radius: 5px;
+            font-family: monospace;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎉 DeployHub Content-Type Fix Test</h1>
+        
+        <div class="success">
+            <h2>✅ SUCCESS!</h2>
+            <p>If you can see this page properly rendered (not as base64 code), then the content-type fix is working!</p>
+        </div>
+        
+        <div class="info">
+            <h3>What this test verifies:</h3>
+            <ul>
+                <li>HTML files are served with <code>text/html; charset=utf-8</code> content-type</li>
+                <li>CSS styles are applied correctly</li>
+                <li>JavaScript works properly</li>
+                <li>No base64 encoding issues</li>
+            </ul>
+        </div>
+        
+        <div class="info">
+            <h3>Technical Details:</h3>
+            <p>This page was deployed using the enhanced FastAPI backend with proper content-type headers.</p>
+            <div class="code">
+                Content-Type: text/html; charset=utf-8<br>
+                Cache-Control: public, max-age=0, must-revalidate<br>
+                Content-Disposition: inline
+            </div>
+        </div>
+        
+        <div class="success">
+            <h3>🚀 Your DeployHub is working correctly!</h3>
+            <p>Deployments should now display as proper websites instead of base64-encoded content.</p>
+        </div>
+    </div>
+    
+    <script>
+        console.log('✅ JavaScript is working - content-type fix successful!');
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('✅ Page loaded successfully with proper content-type headers');
+        });
+    </script>
+</body>
+</html>

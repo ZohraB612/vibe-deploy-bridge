@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Layout } from "@/components/Layout";
 import { useProjects } from "@/contexts/ProjectContext";
+import { useAWS } from "@/contexts/AWSContext";
 import { DeploymentLogs } from "@/components/deployment-logs";
 
 import { DeploymentSkeleton } from "@/components/deployment-skeleton";
@@ -34,7 +35,9 @@ import {
   Rocket,
   RefreshCw,
   Download,
-  CheckCircle
+  CheckCircle,
+  Loader2,
+  Wrench
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
@@ -74,6 +77,7 @@ export default function ProjectDetails() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { getProject, deleteProject } = useProjects();
+  const { credentials, connection } = useAWS();
   
   // Move ALL hooks to the top before any conditional logic
   const [activeTab, setActiveTab] = useState("overview");
@@ -250,6 +254,76 @@ export default function ProjectDetails() {
 
   const handleViewSite = () => {
     window.open(`https://${project.domain}`, '_blank');
+  };
+
+  const handleFixContentTypes = async () => {
+    if (!project.awsBucket) {
+      toast({
+        title: "Error",
+        description: "No S3 bucket found for this project",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (!credentials) {
+      toast({
+        title: "Error",
+        description: "AWS credentials not available. Please connect your AWS account first.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    try {
+      setIsDeploying(true);
+      setDeploymentLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] Starting content-type fix...`]);
+
+      const apiUrl = import.meta.env.VITE_DEPLOYHUB_API_URL || 'http://localhost:3001';
+      
+      const response = await fetch(`${apiUrl}/api/v1/fix-content-types`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          bucketName: project.awsBucket,
+          region: project.awsRegion || 'us-east-1',
+          credentials: {
+            accessKeyId: credentials.accessKeyId,
+            secretAccessKey: credentials.secretAccessKey,
+            sessionToken: credentials.sessionToken
+          }
+        }),
+      });
+
+      const result = await response.json();
+      
+      if (result.success) {
+        setDeploymentLogs(prev => [
+          ...prev, 
+          `[${new Date().toLocaleTimeString()}] ✅ Fixed content types for ${result.updated} files`,
+          ...result.logs.map((log: string) => `[${new Date().toLocaleTimeString()}] ${log}`)
+        ]);
+        
+        toast({
+          title: "Content types fixed",
+          description: `Successfully updated ${result.updated} files. Your website should now display properly.`
+        });
+      } else {
+        throw new Error(result.message || 'Failed to fix content types');
+      }
+    } catch (error) {
+      console.error('Error fixing content types:', error);
+      setDeploymentLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ❌ Error: ${error}`]);
+      toast({
+        title: "Error fixing content types",
+        description: error instanceof Error ? error.message : "An unknown error occurred",
+        variant: "destructive"
+      });
+    } finally {
+      setIsDeploying(false);
+    }
   };
 
   const handleViewLogs = (deployment: Deployment) => {
@@ -447,6 +521,24 @@ export default function ProjectDetails() {
                   <Button onClick={handleViewSite} className="flex items-center gap-2">
                     <ExternalLink className="h-4 w-4" />
                     View Site
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    onClick={handleFixContentTypes}
+                    disabled={isDeploying}
+                    className="flex items-center gap-2"
+                  >
+                    {isDeploying ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Fixing...
+                      </>
+                    ) : (
+                      <>
+                        <Wrench className="h-4 w-4" />
+                        Fix Display
+                      </>
+                    )}
                   </Button>
                   <Button variant="outline" onClick={handleRedeploy} className="flex items-center gap-2">
                     <RotateCcw className="h-4 w-4" />

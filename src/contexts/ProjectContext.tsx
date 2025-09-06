@@ -280,7 +280,7 @@ export function ProjectProvider({ children }: ProjectProviderProps) {
           
           // Call backend cleanup endpoint
           const apiUrl = import.meta.env.VITE_DEPLOYHUB_API_URL || 'http://localhost:3001';
-          const response = await fetch(`${apiUrl}/cleanup-project`, {
+          const response = await fetch(`${apiUrl}/api/v1/cleanup-project`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',

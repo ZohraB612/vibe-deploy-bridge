@@ -313,7 +313,7 @@ export default function AWSSetup() {
       
       const apiUrl = import.meta.env.VITE_DEPLOYHUB_API_URL || 'https://your-api-gateway-url.execute-api.us-east-1.amazonaws.com/prod';
       
-      const response = await fetch(`${apiUrl}/connect-aws-account`, {
+      const response = await fetch(`${apiUrl}/api/v1/connect-aws-account`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
